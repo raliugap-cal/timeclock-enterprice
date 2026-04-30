@@ -1309,10 +1309,10 @@ const LoginScreen = ({ db, onLoginAdmin, onLoginAdmin_server, onLoginEmployee, o
                 /* Step 2: PIN entry */
                 React.createElement("div", null,
                     React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", background: DS.surface, border: `1px solid ${DS.glowGreen}40`, borderRadius: 10, marginBottom: 20 } },
-                        React.createElement(Avatar, { initials: selEmp.avatar || "??", color: ((_a = ((db === null || db === void 0 ? void 0 : db.departments) || []).find(d => d.id === selEmp.dept)) === null || _a === void 0 ? void 0 : _a.color) || DS.glowGreen, size: 44 }),
+                        React.createElement(Avatar, { initials: selEmp.avatar || selEmp.name?.slice(0,2) || "??", color: DS.glowGreen, size: 44 }),
                         React.createElement("div", { style: { flex: 1 } },
                             React.createElement("div", { style: { fontFamily: DS.sans, fontSize: 16, fontWeight: 700, color: DS.text } }, selEmp.name),
-                            React.createElement("div", { style: { fontFamily: DS.sans, fontSize: 12, color: DS.textDim, fontWeight: 500 } }, selEmp.role)),
+                            React.createElement("div", { style: { fontFamily: DS.sans, fontSize: 12, color: DS.textDim, fontWeight: 500 } }, selEmp.role || "Empleado")),
                         React.createElement("button", { onClick: () => { setSelEmp(null); setPin(""); setError(""); }, style: { background: "none", border: "none", color: DS.textDim, cursor: "pointer" } },
                             React.createElement(X, { size: 14 }))),
                     React.createElement("div", { style: { fontFamily: DS.sans, fontSize: 13, color: DS.textMid, textAlign: "center", marginBottom: 16, fontWeight: 500 } }, t("login_pin_instruction")),

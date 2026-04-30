@@ -1,4 +1,4 @@
-require('dotenv').config();
+// Railway injects env vars automatically
 const express      = require('express');
 const path         = require('path');
 const { Pool }     = require('pg');
