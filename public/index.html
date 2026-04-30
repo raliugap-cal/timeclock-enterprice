@@ -1072,7 +1072,7 @@ const useAuth = (db, reloadDB) => {
 
   // When session established → reload DB from server
   useEffect(() => {
-    if (session && reloadDB) reloadDB();
+    if (session && session.type !== 'employee' && reloadDB) reloadDB();
   }, [session?.user?.id]);
 
   // ── Inactivity timer ────────────────────────────────────────────────
@@ -1282,11 +1282,11 @@ const LoginScreen = ({ db, onLoginAdmin, onLoginAdmin_server, onLoginEmployee, o
                 React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10, marginBottom: 20 } },
                     React.createElement("div", { style: { width: 4, height: 20, background: DS.glowGreen, borderRadius: 2 } }),
                     React.createElement(Users, { size: 16, color: DS.glowGreen }),
-                    React.createElement("span", { style: { fontFamily: DS.sans, fontSize: 15, fontWeight: 700, color: DS.text } }, t("login_employee_title"))),
+                    React.createElement("span", { style: { fontFamily: DS.sans, fontSize: 15, fontWeight: 700, color: DS.text } }, selEmp ? selEmp.name : t("login_employee_title"))),
                 error && (React.createElement("div", { style: { marginBottom: 12, padding: "10px 14px", background: `${DS.glowRed}12`, border: `1px solid ${DS.glowRed}40`, borderRadius: 8, display: "flex", gap: 8, alignItems: "center" } },
                     React.createElement(AlertCircle, { size: 13, color: DS.glowRed }),
                     React.createElement("span", { style: { fontFamily: DS.sans, fontSize: 12, color: DS.glowRed, fontWeight: 500 } }, error))),
-                !selEmp ? (React.createElement("div", null,
+                selEmp === null ? (React.createElement("div", null,
                     React.createElement("div", { style: { fontFamily: DS.sans, fontSize: 12, color: DS.textMid, marginBottom: 8, fontWeight: 500 } }, t("login_search_name")),
                     React.createElement("div", { style: { position: "relative", marginBottom: 12 } },
                         React.createElement(Search, { size: 13, color: DS.textDim, style: { position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)" } }),
@@ -11570,7 +11570,7 @@ function App() {
     const { session, checking, loginAdmin, loginEmployee, serverLogin, logout, inactivityWarning, resetInactivityTimer } = useAuth(db, reloadFromAPI);
     // Cuando hay sesión activa en servidor, cargar DB desde PostgreSQL
     useEffect(() => {
-        if (session && window.TC_API && window.TC_API.IS_SERVER && reloadFromAPI) {
+        if (session && session.type !== 'employee' && window.TC_API && window.TC_API.IS_SERVER && reloadFromAPI) {
             reloadFromAPI();
         }
     }, [session?.type, session?.user?.id]);
