@@ -1072,7 +1072,7 @@ const useAuth = (db, reloadDB) => {
 
   // When session established → reload DB from server
   useEffect(() => {
-    if (session && reloadDB) reloadDB();
+    if (session && session.type !== 'employee' && reloadDB) reloadDB();
   }, [session?.user?.id]);
 
   // ── Inactivity timer ────────────────────────────────────────────────
@@ -11570,7 +11570,7 @@ function App() {
     const { session, checking, loginAdmin, loginEmployee, serverLogin, logout, inactivityWarning, resetInactivityTimer } = useAuth(db, reloadFromAPI);
     // Cuando hay sesión activa en servidor, cargar DB desde PostgreSQL
     useEffect(() => {
-        if (session && window.TC_API && window.TC_API.IS_SERVER && reloadFromAPI) {
+        if (session && session.type !== 'employee' && window.TC_API && window.TC_API.IS_SERVER && reloadFromAPI) {
             reloadFromAPI();
         }
     }, [session?.type, session?.user?.id]);
