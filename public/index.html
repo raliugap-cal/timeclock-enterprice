@@ -8354,7 +8354,12 @@ const ViewPermisos = ({ db, upsertSystemUser, deleteSystemUser, updateAccessRule
         if (Array.isArray(saved) && saved.length > 0) return saved;
         return ["MX", "US", "RD", "SV"]; // default: todos activos
     };
-    const [activeCountries, setActiveCountries] = useState(getActiveCountries);
+    const [activeCountries, setActiveCountries] = useState(["MX","US","RD","SV"]);
+    // Sync activeCountries from db when it loads
+    useEffect(() => {
+        const saved = db?.company?.activeCountries;
+        if (Array.isArray(saved) && saved.length > 0) setActiveCountries(saved);
+    }, [db?.company?.activeCountries]);
     const toggleCountry = (key) => {
         setActiveCountries(prev => {
             if (prev.includes(key)) {
