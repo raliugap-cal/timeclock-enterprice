@@ -1350,7 +1350,8 @@ const EmployeePortal = ({ db, session, addTimeRecord, updateTimeRecord, onLogout
         return () => clearInterval(timerId);
     }, []);
     // Active shift today
-    const activeShift = ((db === null || db === void 0 ? void 0 : db.timeRecords) || []).find(r => r.empId === emp.id && r.date === today && !r.exit);
+    // Buscar turno activo sin importar fecha (puede ser de días anteriores)
+    const activeShift = ((db === null || db === void 0 ? void 0 : db.timeRecords) || []).find(r => r.empId === emp.id && !r.exit);
     // All shifts this month
     const myRecords = ((db === null || db === void 0 ? void 0 : db.timeRecords) || []).filter(r => r.empId === emp.id).slice(0, 15);
     const timeStr = clock.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
@@ -1366,7 +1367,10 @@ const EmployeePortal = ({ db, session, addTimeRecord, updateTimeRecord, onLogout
                 addTimeRecord({ empId: emp.id, date: today, entry: nowStr, exit: null, type: "portal", hours: null, status, approved: true });
             }
             else {
-                const hours = Number(((now - new Date(`${today}T${activeShift.entry}`)) / 3600000).toFixed(2));
+                // Usar la fecha del turno activo (puede ser de días anteriores)
+                const shiftDate = activeShift.date || today;
+                const entryDt = new Date(`${shiftDate}T${activeShift.entry}`);
+                const hours = Number(((now - entryDt) / 3600000).toFixed(2));
                 updateTimeRecord(activeShift.id, { exit: nowStr, hours, approvedExit: true });
             }
             setChecando(false);
@@ -1395,7 +1399,7 @@ const EmployeePortal = ({ db, session, addTimeRecord, updateTimeRecord, onLogout
             React.createElement("div", { style: { textAlign: "center", marginBottom: 36 } },
                 React.createElement("div", { style: { fontFamily: DS.mono, fontSize: 52, fontWeight: 900, color: DS.glow, letterSpacing: "0.05em", lineHeight: 1, textShadow: glowStrong(DS.glow) } }, timeStr),
                 React.createElement("div", { style: { fontFamily: DS.mono, fontSize: 10, color: DS.textDim, marginTop: 6, letterSpacing: "0.15em" } }, dateStr)),
-            activeShift ? (React.createElement("div", { style: { marginBottom: 24, padding: "14px 20px", background: `${DS.glowAmber}10`, border: `1px solid ${DS.glowAmber}44`, display: "flex", alignItems: "center", gap: 14 } },
+            activeShift ? (React.createElement("div", { style: { marginBottom: 24, padding: "14px 20px", background: activeShift.date !== today ? `${DS.glowRed}10` : `${DS.glowAmber}10`, border: `1px solid ${activeShift.date !== today ? DS.glowRed : DS.glowAmber}44`, display: "flex", alignItems: "center", gap: 14 } },
                 React.createElement("div", { style: { width: 10, height: 10, borderRadius: "50%", background: DS.glowAmber, boxShadow: glowStrong(DS.glowAmber), animation: "ping 2s ease-in-out infinite" } }),
                 React.createElement("div", null,
                     React.createElement("div", { style: { fontFamily: DS.sans, fontSize: 13, fontWeight: 800, color: DS.glowAmber } }, t("time_active").toUpperCase()),
@@ -2533,8 +2537,9 @@ const ClockModal = ({ db, addTimeRecord, updateTimeRecord, onClose }) => {
         return () => clearInterval(timerId);
     }, []);
     // FIX: derive action directly from activeShift — no separate action state that can race
+    // Buscar turno activo sin restricción de fecha
     const activeShift = selEmp
-        ? ((db === null || db === void 0 ? void 0 : db.timeRecords) || []).find(r => r.empId === selEmp.id && r.date === date && !r.exit)
+        ? ((db === null || db === void 0 ? void 0 : db.timeRecords) || []).find(r => r.empId === selEmp.id && !r.exit)
         : null;
     const action = activeShift ? "salida" : "entrada";
     // Set default location from employee's location
@@ -2609,7 +2614,8 @@ const ClockModal = ({ db, addTimeRecord, updateTimeRecord, onClose }) => {
         // Capture action NOW before any async re-render can change derived state
         const currentAction = action;
         if (currentAction === "entrada") {
-            const existing = ((db === null || db === void 0 ? void 0 : db.timeRecords) || []).find(r => r.empId === selEmp.id && r.date === date && !r.exit);
+            // Verificar turno activo sin importar fecha
+            const existing = ((db === null || db === void 0 ? void 0 : db.timeRecords) || []).find(r => r.empId === selEmp.id && !r.exit);
             if (existing) {
                 setError("Este empleado ya tiene una entrada activa para esta fecha.");
                 return;
