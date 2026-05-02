@@ -264,6 +264,20 @@ const downloadCSV = (filename, headers, rows) => {
 // ═══════════════════════════════════════════════
 // Centavo-precision helper: always round to 2 decimal places
 const r2 = (x) => Math.round(x * 100) / 100;
+
+// ── Países activos — leído de db.company.activeCountries ─────────────
+const PAISES_TODOS = ["MX","US","RD","SV"];
+const isPaisActivo = (country, db) => {
+    const active = db?.company?.activeCountries;
+    if (!Array.isArray(active) || active.length === 0) return true;
+    return active.includes(country);
+};
+const getPaisesActivos = (db) => {
+    const active = db?.company?.activeCountries;
+    if (!Array.isArray(active) || active.length === 0) return PAISES_TODOS;
+    return active;
+};
+const PAIS_LABELS = { MX:"🇲🇽 México (SAT)", US:"🇺🇸 USA (IRS)", RD:"🇩🇴 Rep. Dominicana", SV:"🇸🇻 El Salvador" };
 // ─── MX tables ───────────────────────────────────────────
 const SAT_ISR = [
     { li: 0, ls: 746.04, ff: 0, pct: 1.92 },
@@ -3143,7 +3157,7 @@ const ViewLocations = ({ db, upsertLocation, deleteLocation }) => {
         { v: "US", l: "🇺🇸 California (IRS+FTB)" },
         { v: "RD", l: "🇩🇴 República Dominicana (DGII)" },
         { v: "SV", l: "🇸🇻 El Salvador (MH)" },
-    ];
+    ].filter(o => isPaisActivo(o.v, db));
     const tzOpts = [
         // México
         { v: "America/Mexico_City", l: "🇲🇽 Mexico City / Centro (UTC-6)" },
@@ -4467,7 +4481,7 @@ const CutModal = ({ db, activeEmps, onProcess, onClose }) => {
                             const dt = v === "US" ? "biweekly" : v === "SV" ? "mensual" : v === "RD" ? "mensual" : type;
                             setType(dt);
                             setError("");
-                        }, options: [{ v: "all", l: "🌎 Todos los países" }, { v: "MX", l: "🇲🇽 México (SAT)" }, { v: "US", l: "🇺🇸 California (IRS+FTB)" }, { v: "RD", l: "🇩🇴 Rep. Dominicana (DGII)" }, { v: "SV", l: "🇸🇻 El Salvador (MH)" }] }),
+                        }, options: [{ v: "all", l: "🌎 Todos los países" }, ...getPaisesActivos(db).map(p => ({ v: p, l: PAIS_LABELS[p] || p }))] }),
                     React.createElement(Input, { label: "Tipo de N\u00F3mina", type: "select", value: type, onChange: v => { setType(v); setError(""); }, options: [{ v: "all", l: t("pay_all_types") }, { v: "semanal", l: t("pay_weekly") }, { v: "quincenal", l: t("pay_biweekly") }, { v: "biweekly", l: "Biweekly (US)" }, { v: "mensual", l: "Mensual" }] }),
                     React.createElement("div", null,
                         React.createElement("div", { style: { fontFamily: DS.mono, fontSize: 9, color: DS.textDim, letterSpacing: "0.1em", marginBottom: 6 } }, "C\u00C1LCULO RETROACTIVO"),
@@ -8324,6 +8338,38 @@ const ViewPermisos = ({ db, upsertSystemUser, deleteSystemUser, updateAccessRule
     // ── Company settings state ──────────────────────────────
     const [companyForm, setCompanyForm] = useState(null); // null = not editing
     const [companySaved, setCompanySaved] = useState(false);
+    // ── Países activos ──────────────────────────────────────────
+    const PAISES_DEF = [
+        { key: "MX", label: "México", flag: "🇲🇽", currency: "MXN", color: "#22c55e",
+          desc: "ISR · IMSS · INFONAVIT · CFDI 4.0" },
+        { key: "US", label: "USA", flag: "🇺🇸", currency: "USD", color: "#3b82f6",
+          desc: "IRS Federal · CA FTB · SDI · SS · Medicare" },
+        { key: "RD", label: "Rep. Dominicana", flag: "🇩🇴", currency: "DOP", color: "#f59e0b",
+          desc: "ISR Ley 11-92 · TSS (SFS + AFP)" },
+        { key: "SV", label: "El Salvador", flag: "🇸🇻", currency: "USD", color: "#a855f7",
+          desc: "ISR Decreto 10/2025 · ISSS · AFP" },
+    ];
+    const getActiveCountries = () => {
+        const saved = db?.company?.activeCountries;
+        if (Array.isArray(saved) && saved.length > 0) return saved;
+        return ["MX", "US", "RD", "SV"]; // default: todos activos
+    };
+    const [activeCountries, setActiveCountries] = useState(getActiveCountries);
+    const toggleCountry = (key) => {
+        setActiveCountries(prev => {
+            if (prev.includes(key)) {
+                if (prev.length === 1) return prev; // al menos 1 activo
+                return prev.filter(c => c !== key);
+            }
+            return [...prev, key];
+        });
+    };
+    const saveCountries = () => {
+        const co = db?.company || {};
+        updateCompany({ ...co, activeCountries });
+        setCompanySaved(true);
+        setTimeout(() => setCompanySaved(false), 3000);
+    };
     const initCompanyForm = () => {
         const co = db?.company || {};
         setCompanyForm({
@@ -8354,6 +8400,7 @@ const ViewPermisos = ({ db, upsertSystemUser, deleteSystemUser, updateAccessRule
             phone: companyForm.phone,
             email: companyForm.email,
             website: companyForm.website,
+            activeCountries: db?.company?.activeCountries || ["MX","US","RD","SV"],
         });
         setCompanySaved(true);
         setTimeout(() => setCompanySaved(false), 3000);
@@ -8530,6 +8577,7 @@ const ViewPermisos = ({ db, upsertSystemUser, deleteSystemUser, updateAccessRule
             { id: "users", label: "USUARIOS DEL SISTEMA", icon: Users },
             { id: "roles", label: "GUÍA DE ROLES", icon: Layers },
             { id: "empresa", label: "EMPRESA", icon: Building2 },
+            { id: "paises", label: "PAÍSES", icon: Globe },
         ].map(t => {
             const active = tab === t.id;
             return (React.createElement("button", { key: t.id, onClick: () => setTab(t.id), style: {
@@ -8977,6 +9025,44 @@ const ViewPermisos = ({ db, upsertSystemUser, deleteSystemUser, updateAccessRule
                     )
                 )
             )
+        ,
+        tab === "paises" && (React.createElement("div", null,
+            React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 } },
+                React.createElement("div", null,
+                    React.createElement("div", { style: { fontFamily: DS.sans, fontSize: 18, fontWeight: 800, color: DS.text } }, "Configuración de Países"),
+                    React.createElement("div", { style: { fontFamily: DS.sans, fontSize: 12, color: DS.textDim, marginTop: 3 } }, "Activa o desactiva los países disponibles en toda la aplicación")),
+                React.createElement("div", { style: { display: "flex", gap: 10, alignItems: "center" } },
+                    companySaved && React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 6, padding: "6px 14px", background: `${DS.glowGreen}12`, border: `1px solid ${DS.glowGreen}44`, color: DS.glowGreen, fontFamily: DS.sans, fontSize: 12, fontWeight: 600 } },
+                        React.createElement(CheckCircle, { size: 13 }), " Guardado"),
+                    React.createElement("button", { onClick: saveCountries,
+                        style: { display: "flex", alignItems: "center", gap: 7, padding: "9px 18px", background: `${DS.glowPurple}18`, border: `1px solid ${DS.glowPurple}55`, color: DS.glowPurple, fontFamily: DS.sans, fontSize: 12, fontWeight: 700, cursor: "pointer", borderRadius: 8 } },
+                        React.createElement(CheckCircle, { size: 13 }), " Guardar configuración"))),
+            React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 24 } },
+                PAISES_DEF.map(p => {
+                    const active = activeCountries.includes(p.key);
+                    return React.createElement("div", { key: p.key,
+                        style: { background: DS.bgAlt, border: `2px solid ${active ? p.color + "88" : DS.border}`, borderRadius: 12, padding: "20px 24px", transition: "all .2s", opacity: active ? 1 : 0.55 } },
+                        React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 } },
+                            React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 12 } },
+                                React.createElement("span", { style: { fontSize: 32 } }, p.flag),
+                                React.createElement("div", null,
+                                    React.createElement("div", { style: { fontFamily: DS.sans, fontSize: 16, fontWeight: 800, color: DS.text } }, p.label),
+                                    React.createElement("div", { style: { fontFamily: DS.mono, fontSize: 10, color: p.color, fontWeight: 700 } }, p.currency + " · " + p.key))),
+                            React.createElement("button", { onClick: () => toggleCountry(p.key),
+                                style: { position: "relative", width: 52, height: 28, borderRadius: 14, border: "none", cursor: "pointer",
+                                    background: active ? p.color : DS.border, transition: "background .2s" } },
+                                React.createElement("div", { style: { position: "absolute", top: 3, left: active ? 27 : 3, width: 22, height: 22, borderRadius: "50%", background: "#fff", transition: "left .2s", boxShadow: "0 1px 4px rgba(0,0,0,.3)" } }))),
+                        React.createElement("div", { style: { fontFamily: DS.mono, fontSize: 10, color: DS.textDim, marginBottom: 8 } }, p.desc),
+                        React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 6 } },
+                            React.createElement("div", { style: { width: 8, height: 8, borderRadius: "50%", background: active ? p.color : DS.textDim } }),
+                            React.createElement("span", { style: { fontFamily: DS.sans, fontSize: 12, fontWeight: 600, color: active ? p.color : DS.textDim } },
+                                active ? "ACTIVO — disponible en toda la app" : "INACTIVO — oculto en empleados y nómina")));
+                })),
+            React.createElement("div", { style: { padding: "16px 20px", background: `${DS.glowAmber}08`, border: `1px solid ${DS.glowAmber}33`, borderRadius: 8 } },
+                React.createElement("div", { style: { fontFamily: DS.mono, fontSize: 9, color: DS.glowAmber, fontWeight: 700, letterSpacing: "0.1em", marginBottom: 8 } }, "⚠ IMPORTANTE"),
+                React.createElement("div", { style: { fontFamily: DS.sans, fontSize: 12, color: DS.textDim, lineHeight: 1.6 } },
+                    "Al desactivar un país: los empleados registrados en ese país seguirán existiendo pero NO aparecerán en los selectores al crear nuevos empleados. Los cortes de nómina existentes no se ven afectados. Debes tener al menos 1 país activo."))))
+
         )),
         confirmDel && (React.createElement("div", { style: { position: "fixed", inset: 0, background: "rgba(3,7,18,.92)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 2000, backdropFilter: "blur(10px)" }, onClick: () => setConfirmDel(null) },
             React.createElement("div", { style: { background: DS.bgAlt, border: `1px solid ${DS.glowRed}44`, width: 420, padding: 28, position: "relative", textAlign: "center" }, onClick: e => e.stopPropagation() },
