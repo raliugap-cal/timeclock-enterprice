@@ -8323,6 +8323,18 @@ const getRoleTypes = (t) => [
     { id: "viewer", label: "Auditor", color: "#00ff88", icon: Eye, desc: t("action_see") },
     { id: "employee", label: t("emp_type_label"), color: "#a855f7", icon: Users, desc: "Portal" },
 ];
+// ── Catálogo de países soportados ────────────────────────────────────
+const PAISES_DEF = [
+    { key: "MX", label: "México", flag: "🇲🇽", currency: "MXN", color: "#22c55e",
+      desc: "ISR · IMSS · INFONAVIT · CFDI 4.0" },
+    { key: "US", label: "USA", flag: "🇺🇸", currency: "USD", color: "#3b82f6",
+      desc: "IRS Federal · CA FTB · SDI · SS · Medicare" },
+    { key: "RD", label: "Rep. Dominicana", flag: "🇩🇴", currency: "DOP", color: "#f59e0b",
+      desc: "ISR Ley 11-92 · TSS (SFS + AFP)" },
+    { key: "SV", label: "El Salvador", flag: "🇸🇻", currency: "USD", color: "#a855f7",
+      desc: "ISR Decreto 10/2025 · ISSS · AFP" },
+];
+
 const ViewPermisos = ({ db, upsertSystemUser, deleteSystemUser, updateAccessRule, updateUserOverrides, updateCompany }) => {
     const { t } = useT();
     const [tab, setTab] = useState("matrix");
@@ -8339,16 +8351,7 @@ const ViewPermisos = ({ db, upsertSystemUser, deleteSystemUser, updateAccessRule
     const [companyForm, setCompanyForm] = useState(null); // null = not editing
     const [companySaved, setCompanySaved] = useState(false);
     // ── Países activos ──────────────────────────────────────────
-    const PAISES_DEF = [
-        { key: "MX", label: "México", flag: "🇲🇽", currency: "MXN", color: "#22c55e",
-          desc: "ISR · IMSS · INFONAVIT · CFDI 4.0" },
-        { key: "US", label: "USA", flag: "🇺🇸", currency: "USD", color: "#3b82f6",
-          desc: "IRS Federal · CA FTB · SDI · SS · Medicare" },
-        { key: "RD", label: "Rep. Dominicana", flag: "🇩🇴", currency: "DOP", color: "#f59e0b",
-          desc: "ISR Ley 11-92 · TSS (SFS + AFP)" },
-        { key: "SV", label: "El Salvador", flag: "🇸🇻", currency: "USD", color: "#a855f7",
-          desc: "ISR Decreto 10/2025 · ISSS · AFP" },
-    ];
+    // PAISES_DEF defined at module scope below
     const getActiveCountries = () => {
         const saved = db?.company?.activeCountries;
         if (Array.isArray(saved) && saved.length > 0) return saved;
@@ -9031,37 +9034,34 @@ const ViewPermisos = ({ db, upsertSystemUser, deleteSystemUser, updateAccessRule
                 )
             )
         ,
-        tab === "paises" && (React.createElement("div", null,
-            React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 } },
-                React.createElement("div", null,
-                    React.createElement("div", { style: { fontFamily: DS.sans, fontSize: 18, fontWeight: 800, color: DS.text } }, "Configuración de Países"),
-                    React.createElement("div", { style: { fontFamily: DS.sans, fontSize: 12, color: DS.textDim, marginTop: 3 } }, "Activa o desactiva los países disponibles en toda la aplicación")),
-                React.createElement("div", { style: { display: "flex", gap: 10, alignItems: "center" } },
-                    companySaved && React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 6, padding: "6px 14px", background: `${DS.glowGreen}12`, border: `1px solid ${DS.glowGreen}44`, color: DS.glowGreen, fontFamily: DS.sans, fontSize: 12, fontWeight: 600 } },
-                        React.createElement(CheckCircle, { size: 13 }), " Guardado"),
-                    React.createElement("button", { onClick: saveCountries,
-                        style: { display: "flex", alignItems: "center", gap: 7, padding: "9px 18px", background: `${DS.glowPurple}18`, border: `1px solid ${DS.glowPurple}55`, color: DS.glowPurple, fontFamily: DS.sans, fontSize: 12, fontWeight: 700, cursor: "pointer", borderRadius: 8 } },
-                        React.createElement(CheckCircle, { size: 13 }), " Guardar configuración"))),
-            React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 24 } },
-                PAISES_DEF.map(p => {
-                    const active = activeCountries.includes(p.key);
+        tab === "paises" && (React.createElement("div", { style: { padding: 40 } },
+            React.createElement("div", { style: { fontFamily: DS.mono, fontSize: 14, color: DS.glow, marginBottom: 20 } },
+                "PAÍSES TAB ACTIVO — activeCountries: " + JSON.stringify(activeCountries)),
+            React.createElement("div", { style: { fontFamily: DS.mono, fontSize: 12, color: DS.textDim, marginBottom: 20 } },
+                "PAISES_DEF length: " + (PAISES_DEF || []).length),
+            React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 12, marginBottom: 24 } },
+                (PAISES_DEF || []).map(p => {
+                    const active = (activeCountries || []).includes(p.key);
                     return React.createElement("div", { key: p.key,
-                        style: { background: DS.bgAlt, border: `2px solid ${active ? p.color + "88" : DS.border}`, borderRadius: 12, padding: "20px 24px", transition: "all .2s", opacity: active ? 1 : 0.55 } },
-                        React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 } },
-                            React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 12 } },
-                                React.createElement("span", { style: { fontSize: 32 } }, p.flag),
-                                React.createElement("div", null,
-                                    React.createElement("div", { style: { fontFamily: DS.sans, fontSize: 16, fontWeight: 800, color: DS.text } }, p.label),
-                                    React.createElement("div", { style: { fontFamily: DS.mono, fontSize: 10, color: p.color, fontWeight: 700 } }, p.currency + " · " + p.key))),
-                            React.createElement("button", { onClick: () => toggleCountry(p.key),
-                                style: { position: "relative", width: 52, height: 28, borderRadius: 14, border: "none", cursor: "pointer",
-                                    background: active ? p.color : DS.border, transition: "background .2s" } },
-                                React.createElement("div", { style: { position: "absolute", top: 3, left: active ? 27 : 3, width: 22, height: 22, borderRadius: "50%", background: "#fff", transition: "left .2s", boxShadow: "0 1px 4px rgba(0,0,0,.3)" } }))),
-                        React.createElement("div", { style: { fontFamily: DS.mono, fontSize: 10, color: DS.textDim, marginBottom: 8 } }, p.desc),
-                        React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 6 } },
-                            React.createElement("div", { style: { width: 8, height: 8, borderRadius: "50%", background: active ? p.color : DS.textDim } }),
+                        style: { background: DS.bgAlt, border: `2px solid ${active ? p.color : DS.border}`,
+                            borderRadius: 12, padding: "18px 22px", display: "flex", alignItems: "center",
+                            justifyContent: "space-between", transition: "all .2s" } },
+                        React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 16 } },
+                            React.createElement("span", { style: { fontSize: 36, lineHeight: 1 } }, p.flag),
+                            React.createElement("div", null,
+                                React.createElement("div", { style: { fontFamily: DS.sans, fontSize: 16, fontWeight: 800, color: DS.text } }, p.label),
+                                React.createElement("div", { style: { fontFamily: DS.mono, fontSize: 10, color: p.color, fontWeight: 700, marginTop: 2 } }, p.currency + " · " + p.key),
+                                React.createElement("div", { style: { fontFamily: DS.mono, fontSize: 9, color: DS.textDim, marginTop: 4 } }, p.desc))),
+                        React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 14 } },
                             React.createElement("span", { style: { fontFamily: DS.sans, fontSize: 12, fontWeight: 600, color: active ? p.color : DS.textDim } },
-                                active ? "ACTIVO — disponible en toda la app" : "INACTIVO — oculto en empleados y nómina")));
+                                active ? "ACTIVO" : "INACTIVO"),
+                            React.createElement("button", { onClick: () => toggleCountry(p.key),
+                                style: { position: "relative", width: 56, height: 30, borderRadius: 15, border: "none",
+                                    cursor: "pointer", background: active ? p.color : DS.border,
+                                    transition: "background .2s", flexShrink: 0 } },
+                                React.createElement("div", { style: { position: "absolute", top: 4, left: active ? 30 : 4,
+                                    width: 22, height: 22, borderRadius: "50%", background: "#fff",
+                                    transition: "left .2s", boxShadow: "0 1px 4px rgba(0,0,0,.3)" } }))));
                 })),
             React.createElement("div", { style: { padding: "16px 20px", background: `${DS.glowAmber}08`, border: `1px solid ${DS.glowAmber}33`, borderRadius: 8 } },
                 React.createElement("div", { style: { fontFamily: DS.mono, fontSize: 9, color: DS.glowAmber, fontWeight: 700, letterSpacing: "0.1em", marginBottom: 8 } }, "⚠ IMPORTANTE"),
