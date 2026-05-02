@@ -1367,10 +1367,11 @@ const EmployeePortal = ({ db, session, addTimeRecord, updateTimeRecord, onLogout
                 addTimeRecord({ empId: emp.id, date: today, entry: nowStr, exit: null, type: "portal", hours: null, status, approved: true });
             }
             else {
-                // Usar la fecha del turno activo (puede ser de días anteriores)
+                // Usar fechas reales — el turno puede cruzar medianoche
                 const shiftDate = activeShift.date || today;
-                const entryDt = new Date(`${shiftDate}T${activeShift.entry}`);
-                const hours = Number(((now - entryDt) / 3600000).toFixed(2));
+                const entryDt   = new Date(`${shiftDate}T${activeShift.entry}:00`);
+                const hoursRaw  = (now - entryDt) / 3600000;
+                const hours     = Number(Math.max(0, hoursRaw).toFixed(2));
                 updateTimeRecord(activeShift.id, { exit: nowStr, hours, approvedExit: true });
             }
             setChecando(false);
@@ -2643,12 +2644,19 @@ const ClockModal = ({ db, addTimeRecord, updateTimeRecord, onClose }) => {
                 setError("No se encontró turno activo para este empleado hoy.");
                 return;
             }
-            if (exitTime && exitTime <= activeShift.entry) {
+            // Solo validar si el turno es del mismo día
+            if (exitTime && activeShift.date === date && exitTime <= activeShift.entry) {
                 setError("La hora de salida debe ser posterior a la entrada.");
                 return;
             }
             const finalExit = exitTime || time;
-            const hours = Number(((new Date(`2000-01-01T${finalExit}`) - new Date(`2000-01-01T${activeShift.entry}`)) / 3600000).toFixed(2));
+            // Usar fechas reales — el turno puede cruzar medianoche
+            const entryDate = activeShift.date || date;
+            const entryDt   = new Date(`${entryDate}T${activeShift.entry}:00`);
+            const exitDt    = new Date(`${date}T${finalExit}:00`);
+            // Si la salida es antes que la entrada en el mismo día, el turno cruzó medianoche
+            const hoursRaw  = (exitDt - entryDt) / 3600000;
+            const hours     = Number(Math.abs(hoursRaw).toFixed(2));
             const entryHour = parseInt(activeShift.entry.split(":")[0]);
             const status = entryHour > 9 ? "tardanza" : "normal";
             updateTimeRecord(activeShift.id, {
