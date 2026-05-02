@@ -3415,7 +3415,11 @@ const PayrollResultModal = ({ data, onClose, savePayrollCut }) => {
         : null;
 
     // ── helpers de conceptos ────────────────────────────────────
-    const getConceptos = (empId) => conceptosPorEmp[empId] || [];
+    // ── Ref para acceder al estado más reciente en handleConfirm ────
+    const conceptosPorEmpRef = useRef(conceptosPorEmp);
+    useEffect(() => { conceptosPorEmpRef.current = conceptosPorEmp; }, [conceptosPorEmp]);
+
+    const getConceptos = (empId) => conceptosPorEmpRef.current[empId] || [];
 
     // Calcula monto automático dado fórmula + parámetro + base de cálculo del empleado
     const calcMontoFormula = (formula, paramVal, baseCalc) => {
@@ -3455,21 +3459,53 @@ const PayrollResultModal = ({ data, onClose, savePayrollCut }) => {
         if (!base) return base;
         const conceptos = getConceptos(e.id).filter(c => c.aplica && c.label && Number(c.monto) > 0);
         if (!conceptos.length) return base;
-        let newBase = base.base, newNet = base.net, newTotalDed = base.totalDed;
+
+        // Separar percepciones y deducciones
+        const percepciones = conceptos.filter(c => c.tipo === "percepcion" || c.tipo === "finiquito");
+        const deducciones   = conceptos.filter(c => c.tipo === "deduccion");
+
+        const totalPerc = r2(percepciones.reduce((s, c) => s + Number(c.monto), 0));
+        const totalDed  = r2(deducciones.reduce((s,  c) => s + Number(c.monto), 0));
+
+        if (totalPerc > 0) {
+            // Recalcular impuestos con el nuevo bruto (base + percepciones)
+            // Esto asegura que las percepciones tributan correctamente
+            const empWithNewSalary = { ...e, salary: r2((e.salary || 0) + totalPerc) };
+            const recalc = calcPayroll(empWithNewSalary, base.periodDays || periodDaysForCut);
+
+            // Aplicar deducciones manuales encima del recálculo
+            const extraDeds = { ...recalc.deds };
+            deducciones.forEach(c => {
+                extraDeds[c.label] = r2((extraDeds[c.label] || 0) + Number(c.monto));
+            });
+            const netFinal = r2(recalc.net - totalDed);
+
+            return {
+                ...recalc,
+                net: netFinal,
+                totalDed: r2(recalc.totalDed + totalDed),
+                deds: extraDeds,
+                conceptosEspeciales: conceptos,
+                // Preserve hours data
+                hoursTotal: base.hoursTotal, hoursReg: base.hoursReg,
+                hoursOT: base.hoursOT, hoursDouble: base.hoursDouble,
+                hasOvertime: base.hasOvertime, hasDouble: base.hasDouble,
+                _realHours: base._realHours, _hoursFromRecords: base._hoursFromRecords,
+            };
+        }
+
+        // Solo deducciones — no hay que recalcular impuestos, solo restar del neto
         const extraDeds = { ...base.deds };
-        conceptos.forEach(c => {
-            const amt = Number(c.monto);
-            if (c.tipo === "percepcion" || c.tipo === "finiquito") {
-                newBase = r2(newBase + amt);
-                newNet  = r2(newNet  + amt);
-            } else {
-                newNet      = r2(newNet      - amt);
-                newTotalDed = r2(newTotalDed + amt);
-                extraDeds[c.label] = r2((extraDeds[c.label] || 0) + amt);
-            }
+        deducciones.forEach(c => {
+            extraDeds[c.label] = r2((extraDeds[c.label] || 0) + Number(c.monto));
         });
-        return { ...base, base: newBase, net: newNet, totalDed: newTotalDed,
-                 deds: extraDeds, conceptosEspeciales: conceptos };
+        return {
+            ...base,
+            net: r2(base.net - totalDed),
+            totalDed: r2(base.totalDed + totalDed),
+            deds: extraDeds,
+            conceptosEspeciales: conceptos,
+        };
     };
 
     // ── Agregar desde catálogo ──────────────────────────────────
