@@ -264,6 +264,20 @@ const downloadCSV = (filename, headers, rows) => {
 // ═══════════════════════════════════════════════
 // Centavo-precision helper: always round to 2 decimal places
 const r2 = (x) => Math.round(x * 100) / 100;
+
+// ── Países activos — leído de db.company.activeCountries ─────────────
+const PAISES_TODOS = ["MX","US","RD","SV"];
+const isPaisActivo = (country, db) => {
+    const active = db?.company?.activeCountries;
+    if (!Array.isArray(active) || active.length === 0) return true;
+    return active.includes(country);
+};
+const getPaisesActivos = (db) => {
+    const active = db?.company?.activeCountries;
+    if (!Array.isArray(active) || active.length === 0) return PAISES_TODOS;
+    return active;
+};
+const PAIS_LABELS = { MX:"🇲🇽 México (SAT)", US:"🇺🇸 USA (IRS)", RD:"🇩🇴 Rep. Dominicana", SV:"🇸🇻 El Salvador" };
 // ─── MX tables ───────────────────────────────────────────
 const SAT_ISR = [
     { li: 0, ls: 746.04, ff: 0, pct: 1.92 },
@@ -1282,11 +1296,11 @@ const LoginScreen = ({ db, onLoginAdmin, onLoginAdmin_server, onLoginEmployee, o
                 React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10, marginBottom: 20 } },
                     React.createElement("div", { style: { width: 4, height: 20, background: DS.glowGreen, borderRadius: 2 } }),
                     React.createElement(Users, { size: 16, color: DS.glowGreen }),
-                    React.createElement("span", { style: { fontFamily: DS.sans, fontSize: 15, fontWeight: 700, color: DS.text } }, t("login_employee_title"))),
+                    React.createElement("span", { style: { fontFamily: DS.sans, fontSize: 15, fontWeight: 700, color: DS.text } }, selEmp ? selEmp.name : t("login_employee_title"))),
                 error && (React.createElement("div", { style: { marginBottom: 12, padding: "10px 14px", background: `${DS.glowRed}12`, border: `1px solid ${DS.glowRed}40`, borderRadius: 8, display: "flex", gap: 8, alignItems: "center" } },
                     React.createElement(AlertCircle, { size: 13, color: DS.glowRed }),
                     React.createElement("span", { style: { fontFamily: DS.sans, fontSize: 12, color: DS.glowRed, fontWeight: 500 } }, error))),
-                !selEmp ? (React.createElement("div", null,
+                selEmp === null ? (React.createElement("div", null,
                     React.createElement("div", { style: { fontFamily: DS.sans, fontSize: 12, color: DS.textMid, marginBottom: 8, fontWeight: 500 } }, t("login_search_name")),
                     React.createElement("div", { style: { position: "relative", marginBottom: 12 } },
                         React.createElement(Search, { size: 13, color: DS.textDim, style: { position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)" } }),
@@ -1350,7 +1364,8 @@ const EmployeePortal = ({ db, session, addTimeRecord, updateTimeRecord, onLogout
         return () => clearInterval(timerId);
     }, []);
     // Active shift today
-    const activeShift = ((db === null || db === void 0 ? void 0 : db.timeRecords) || []).find(r => r.empId === emp.id && r.date === today && !r.exit);
+    // Buscar turno activo sin importar fecha (puede ser de días anteriores)
+    const activeShift = ((db === null || db === void 0 ? void 0 : db.timeRecords) || []).find(r => r.empId === emp.id && !r.exit);
     // All shifts this month
     const myRecords = ((db === null || db === void 0 ? void 0 : db.timeRecords) || []).filter(r => r.empId === emp.id).slice(0, 15);
     const timeStr = clock.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
@@ -1366,7 +1381,11 @@ const EmployeePortal = ({ db, session, addTimeRecord, updateTimeRecord, onLogout
                 addTimeRecord({ empId: emp.id, date: today, entry: nowStr, exit: null, type: "portal", hours: null, status, approved: true });
             }
             else {
-                const hours = Number(((now - new Date(`${today}T${activeShift.entry}`)) / 3600000).toFixed(2));
+                // Usar fechas reales — el turno puede cruzar medianoche
+                const shiftDate = activeShift.date || today;
+                const entryDt   = new Date(`${shiftDate}T${activeShift.entry}:00`);
+                const hoursRaw  = (now - entryDt) / 3600000;
+                const hours     = Number(Math.max(0, hoursRaw).toFixed(2));
                 updateTimeRecord(activeShift.id, { exit: nowStr, hours, approvedExit: true });
             }
             setChecando(false);
@@ -1395,7 +1414,7 @@ const EmployeePortal = ({ db, session, addTimeRecord, updateTimeRecord, onLogout
             React.createElement("div", { style: { textAlign: "center", marginBottom: 36 } },
                 React.createElement("div", { style: { fontFamily: DS.mono, fontSize: 52, fontWeight: 900, color: DS.glow, letterSpacing: "0.05em", lineHeight: 1, textShadow: glowStrong(DS.glow) } }, timeStr),
                 React.createElement("div", { style: { fontFamily: DS.mono, fontSize: 10, color: DS.textDim, marginTop: 6, letterSpacing: "0.15em" } }, dateStr)),
-            activeShift ? (React.createElement("div", { style: { marginBottom: 24, padding: "14px 20px", background: `${DS.glowAmber}10`, border: `1px solid ${DS.glowAmber}44`, display: "flex", alignItems: "center", gap: 14 } },
+            activeShift ? (React.createElement("div", { style: { marginBottom: 24, padding: "14px 20px", background: activeShift.date !== today ? `${DS.glowRed}10` : `${DS.glowAmber}10`, border: `1px solid ${activeShift.date !== today ? DS.glowRed : DS.glowAmber}44`, display: "flex", alignItems: "center", gap: 14 } },
                 React.createElement("div", { style: { width: 10, height: 10, borderRadius: "50%", background: DS.glowAmber, boxShadow: glowStrong(DS.glowAmber), animation: "ping 2s ease-in-out infinite" } }),
                 React.createElement("div", null,
                     React.createElement("div", { style: { fontFamily: DS.sans, fontSize: 13, fontWeight: 800, color: DS.glowAmber } }, t("time_active").toUpperCase()),
@@ -2533,8 +2552,9 @@ const ClockModal = ({ db, addTimeRecord, updateTimeRecord, onClose }) => {
         return () => clearInterval(timerId);
     }, []);
     // FIX: derive action directly from activeShift — no separate action state that can race
+    // Buscar turno activo sin restricción de fecha
     const activeShift = selEmp
-        ? ((db === null || db === void 0 ? void 0 : db.timeRecords) || []).find(r => r.empId === selEmp.id && r.date === date && !r.exit)
+        ? ((db === null || db === void 0 ? void 0 : db.timeRecords) || []).find(r => r.empId === selEmp.id && !r.exit)
         : null;
     const action = activeShift ? "salida" : "entrada";
     // Set default location from employee's location
@@ -2609,7 +2629,8 @@ const ClockModal = ({ db, addTimeRecord, updateTimeRecord, onClose }) => {
         // Capture action NOW before any async re-render can change derived state
         const currentAction = action;
         if (currentAction === "entrada") {
-            const existing = ((db === null || db === void 0 ? void 0 : db.timeRecords) || []).find(r => r.empId === selEmp.id && r.date === date && !r.exit);
+            // Verificar turno activo sin importar fecha
+            const existing = ((db === null || db === void 0 ? void 0 : db.timeRecords) || []).find(r => r.empId === selEmp.id && !r.exit);
             if (existing) {
                 setError("Este empleado ya tiene una entrada activa para esta fecha.");
                 return;
@@ -2637,12 +2658,19 @@ const ClockModal = ({ db, addTimeRecord, updateTimeRecord, onClose }) => {
                 setError("No se encontró turno activo para este empleado hoy.");
                 return;
             }
-            if (exitTime && exitTime <= activeShift.entry) {
+            // Solo validar si el turno es del mismo día
+            if (exitTime && activeShift.date === date && exitTime <= activeShift.entry) {
                 setError("La hora de salida debe ser posterior a la entrada.");
                 return;
             }
             const finalExit = exitTime || time;
-            const hours = Number(((new Date(`2000-01-01T${finalExit}`) - new Date(`2000-01-01T${activeShift.entry}`)) / 3600000).toFixed(2));
+            // Usar fechas reales — el turno puede cruzar medianoche
+            const entryDate = activeShift.date || date;
+            const entryDt   = new Date(`${entryDate}T${activeShift.entry}:00`);
+            const exitDt    = new Date(`${date}T${finalExit}:00`);
+            // Si la salida es antes que la entrada en el mismo día, el turno cruzó medianoche
+            const hoursRaw  = (exitDt - entryDt) / 3600000;
+            const hours     = Number(Math.abs(hoursRaw).toFixed(2));
             const entryHour = parseInt(activeShift.entry.split(":")[0]);
             const status = entryHour > 9 ? "tardanza" : "normal";
             updateTimeRecord(activeShift.id, {
@@ -3129,7 +3157,7 @@ const ViewLocations = ({ db, upsertLocation, deleteLocation }) => {
         { v: "US", l: "🇺🇸 California (IRS+FTB)" },
         { v: "RD", l: "🇩🇴 República Dominicana (DGII)" },
         { v: "SV", l: "🇸🇻 El Salvador (MH)" },
-    ];
+    ].filter(o => isPaisActivo(o.v, db));
     const tzOpts = [
         // México
         { v: "America/Mexico_City", l: "🇲🇽 Mexico City / Centro (UTC-6)" },
@@ -3401,7 +3429,11 @@ const PayrollResultModal = ({ data, onClose, savePayrollCut }) => {
         : null;
 
     // ── helpers de conceptos ────────────────────────────────────
-    const getConceptos = (empId) => conceptosPorEmp[empId] || [];
+    // ── Ref para acceder al estado más reciente en handleConfirm ────
+    const conceptosPorEmpRef = useRef(conceptosPorEmp);
+    useEffect(() => { conceptosPorEmpRef.current = conceptosPorEmp; }, [conceptosPorEmp]);
+
+    const getConceptos = (empId) => conceptosPorEmpRef.current[empId] || [];
 
     // Calcula monto automático dado fórmula + parámetro + base de cálculo del empleado
     const calcMontoFormula = (formula, paramVal, baseCalc) => {
@@ -3441,21 +3473,53 @@ const PayrollResultModal = ({ data, onClose, savePayrollCut }) => {
         if (!base) return base;
         const conceptos = getConceptos(e.id).filter(c => c.aplica && c.label && Number(c.monto) > 0);
         if (!conceptos.length) return base;
-        let newBase = base.base, newNet = base.net, newTotalDed = base.totalDed;
+
+        // Separar percepciones y deducciones
+        const percepciones = conceptos.filter(c => c.tipo === "percepcion" || c.tipo === "finiquito");
+        const deducciones   = conceptos.filter(c => c.tipo === "deduccion");
+
+        const totalPerc = r2(percepciones.reduce((s, c) => s + Number(c.monto), 0));
+        const totalDed  = r2(deducciones.reduce((s,  c) => s + Number(c.monto), 0));
+
+        if (totalPerc > 0) {
+            // Recalcular impuestos con el nuevo bruto (base + percepciones)
+            // Esto asegura que las percepciones tributan correctamente
+            const empWithNewSalary = { ...e, salary: r2((e.salary || 0) + totalPerc) };
+            const recalc = calcPayroll(empWithNewSalary, base.periodDays || periodDaysForCut);
+
+            // Aplicar deducciones manuales encima del recálculo
+            const extraDeds = { ...recalc.deds };
+            deducciones.forEach(c => {
+                extraDeds[c.label] = r2((extraDeds[c.label] || 0) + Number(c.monto));
+            });
+            const netFinal = r2(recalc.net - totalDed);
+
+            return {
+                ...recalc,
+                net: netFinal,
+                totalDed: r2(recalc.totalDed + totalDed),
+                deds: extraDeds,
+                conceptosEspeciales: conceptos,
+                // Preserve hours data
+                hoursTotal: base.hoursTotal, hoursReg: base.hoursReg,
+                hoursOT: base.hoursOT, hoursDouble: base.hoursDouble,
+                hasOvertime: base.hasOvertime, hasDouble: base.hasDouble,
+                _realHours: base._realHours, _hoursFromRecords: base._hoursFromRecords,
+            };
+        }
+
+        // Solo deducciones — no hay que recalcular impuestos, solo restar del neto
         const extraDeds = { ...base.deds };
-        conceptos.forEach(c => {
-            const amt = Number(c.monto);
-            if (c.tipo === "percepcion" || c.tipo === "finiquito") {
-                newBase = r2(newBase + amt);
-                newNet  = r2(newNet  + amt);
-            } else {
-                newNet      = r2(newNet      - amt);
-                newTotalDed = r2(newTotalDed + amt);
-                extraDeds[c.label] = r2((extraDeds[c.label] || 0) + amt);
-            }
+        deducciones.forEach(c => {
+            extraDeds[c.label] = r2((extraDeds[c.label] || 0) + Number(c.monto));
         });
-        return { ...base, base: newBase, net: newNet, totalDed: newTotalDed,
-                 deds: extraDeds, conceptosEspeciales: conceptos };
+        return {
+            ...base,
+            net: r2(base.net - totalDed),
+            totalDed: r2(base.totalDed + totalDed),
+            deds: extraDeds,
+            conceptosEspeciales: conceptos,
+        };
     };
 
     // ── Agregar desde catálogo ──────────────────────────────────
@@ -4417,7 +4481,7 @@ const CutModal = ({ db, activeEmps, onProcess, onClose }) => {
                             const dt = v === "US" ? "biweekly" : v === "SV" ? "mensual" : v === "RD" ? "mensual" : type;
                             setType(dt);
                             setError("");
-                        }, options: [{ v: "all", l: "🌎 Todos los países" }, { v: "MX", l: "🇲🇽 México (SAT)" }, { v: "US", l: "🇺🇸 California (IRS+FTB)" }, { v: "RD", l: "🇩🇴 Rep. Dominicana (DGII)" }, { v: "SV", l: "🇸🇻 El Salvador (MH)" }] }),
+                        }, options: [{ v: "all", l: "🌎 Todos los países" }, ...getPaisesActivos(db).map(p => ({ v: p, l: PAIS_LABELS[p] || p }))] }),
                     React.createElement(Input, { label: "Tipo de N\u00F3mina", type: "select", value: type, onChange: v => { setType(v); setError(""); }, options: [{ v: "all", l: t("pay_all_types") }, { v: "semanal", l: t("pay_weekly") }, { v: "quincenal", l: t("pay_biweekly") }, { v: "biweekly", l: "Biweekly (US)" }, { v: "mensual", l: "Mensual" }] }),
                     React.createElement("div", null,
                         React.createElement("div", { style: { fontFamily: DS.mono, fontSize: 9, color: DS.textDim, letterSpacing: "0.1em", marginBottom: 6 } }, "C\u00C1LCULO RETROACTIVO"),
@@ -8259,6 +8323,18 @@ const getRoleTypes = (t) => [
     { id: "viewer", label: "Auditor", color: "#00ff88", icon: Eye, desc: t("action_see") },
     { id: "employee", label: t("emp_type_label"), color: "#a855f7", icon: Users, desc: "Portal" },
 ];
+// ── Catálogo de países soportados ────────────────────────────────────
+const PAISES_DEF = [
+    { key: "MX", label: "México", flag: "🇲🇽", currency: "MXN", color: "#22c55e",
+      desc: "ISR · IMSS · INFONAVIT · CFDI 4.0" },
+    { key: "US", label: "USA", flag: "🇺🇸", currency: "USD", color: "#3b82f6",
+      desc: "IRS Federal · CA FTB · SDI · SS · Medicare" },
+    { key: "RD", label: "Rep. Dominicana", flag: "🇩🇴", currency: "DOP", color: "#f59e0b",
+      desc: "ISR Ley 11-92 · TSS (SFS + AFP)" },
+    { key: "SV", label: "El Salvador", flag: "🇸🇻", currency: "USD", color: "#a855f7",
+      desc: "ISR Decreto 10/2025 · ISSS · AFP" },
+];
+
 const ViewPermisos = ({ db, upsertSystemUser, deleteSystemUser, updateAccessRule, updateUserOverrides, updateCompany }) => {
     const { t } = useT();
     const [tab, setTab] = useState("matrix");
@@ -8274,6 +8350,34 @@ const ViewPermisos = ({ db, upsertSystemUser, deleteSystemUser, updateAccessRule
     // ── Company settings state ──────────────────────────────
     const [companyForm, setCompanyForm] = useState(null); // null = not editing
     const [companySaved, setCompanySaved] = useState(false);
+    // ── Países activos ──────────────────────────────────────────
+    // PAISES_DEF defined at module scope below
+    const getActiveCountries = () => {
+        const saved = db?.company?.activeCountries;
+        if (Array.isArray(saved) && saved.length > 0) return saved;
+        return ["MX", "US", "RD", "SV"]; // default: todos activos
+    };
+    const [activeCountries, setActiveCountries] = useState(["MX","US","RD","SV"]);
+    // Sync activeCountries from db when it loads
+    useEffect(() => {
+        const saved = db?.company?.activeCountries;
+        if (Array.isArray(saved) && saved.length > 0) setActiveCountries(saved);
+    }, [db?.company?.activeCountries]);
+    const toggleCountry = (key) => {
+        setActiveCountries(prev => {
+            if (prev.includes(key)) {
+                if (prev.length === 1) return prev; // al menos 1 activo
+                return prev.filter(c => c !== key);
+            }
+            return [...prev, key];
+        });
+    };
+    const saveCountries = () => {
+        const co = db?.company || {};
+        updateCompany({ ...co, activeCountries });
+        setCompanySaved(true);
+        setTimeout(() => setCompanySaved(false), 3000);
+    };
     const initCompanyForm = () => {
         const co = db?.company || {};
         setCompanyForm({
@@ -8304,6 +8408,7 @@ const ViewPermisos = ({ db, upsertSystemUser, deleteSystemUser, updateAccessRule
             phone: companyForm.phone,
             email: companyForm.email,
             website: companyForm.website,
+            activeCountries: db?.company?.activeCountries || ["MX","US","RD","SV"],
         });
         setCompanySaved(true);
         setTimeout(() => setCompanySaved(false), 3000);
@@ -8480,6 +8585,7 @@ const ViewPermisos = ({ db, upsertSystemUser, deleteSystemUser, updateAccessRule
             { id: "users", label: "USUARIOS DEL SISTEMA", icon: Users },
             { id: "roles", label: "GUÍA DE ROLES", icon: Layers },
             { id: "empresa", label: "EMPRESA", icon: Building2 },
+            { id: "paises", label: "PAÍSES", icon: Globe },
         ].map(t => {
             const active = tab === t.id;
             return (React.createElement("button", { key: t.id, onClick: () => setTab(t.id), style: {
@@ -8928,6 +9034,52 @@ const ViewPermisos = ({ db, upsertSystemUser, deleteSystemUser, updateAccessRule
                 )
             )
         )),
+        tab === "paises" && (React.createElement("div", { style: { padding: "0 4px" } },
+            React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 } },
+                React.createElement("div", null,
+                    React.createElement("div", { style: { fontFamily: DS.sans, fontSize: 18, fontWeight: 800, color: DS.text } }, "Países Activos"),
+                    React.createElement("div", { style: { fontFamily: DS.sans, fontSize: 12, color: DS.textDim, marginTop: 3 } }, "Los países activos se determinan por las ubicaciones/geocercas configuradas. Activa o desactiva manualmente para restringir el acceso.")),
+                React.createElement("div", { style: { display: "flex", gap: 10, alignItems: "center" } },
+                    companySaved && React.createElement("span", { style: { fontFamily: DS.sans, fontSize: 12, color: DS.glowGreen, fontWeight: 600 } }, "✓ Guardado"),
+                    React.createElement("button", { onClick: saveCountries,
+                        style: { padding: "9px 18px", background: `${DS.glowPurple}18`, border: `1px solid ${DS.glowPurple}55`,
+                            color: DS.glowPurple, fontFamily: DS.mono, fontSize: 11, fontWeight: 700, cursor: "pointer", borderRadius: 8 } },
+                        "Guardar configuración"))),
+            React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 } },
+                PAISES_DEF.map(p => {
+                    const active = (activeCountries || []).includes(p.key);
+                    // Check if this country has any location in the DB
+                    const hasLocation = (db?.locations || []).some(l => l.country === p.key);
+                    return React.createElement("div", { key: p.key,
+                        style: { display: "flex", alignItems: "center", justifyContent: "space-between",
+                            padding: "16px 20px", background: DS.bgAlt,
+                            border: `2px solid ${active ? p.color : DS.border}`,
+                            borderRadius: 10, transition: "all .2s" } },
+                        React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 14 } },
+                            React.createElement("span", { style: { fontSize: 32, lineHeight: 1 } }, p.flag),
+                            React.createElement("div", null,
+                                React.createElement("div", { style: { fontFamily: DS.sans, fontSize: 15, fontWeight: 800, color: DS.text } }, p.label),
+                                React.createElement("div", { style: { fontFamily: DS.mono, fontSize: 10, color: p.color, fontWeight: 700, marginTop: 2 } }, p.currency + " · " + p.key),
+                                React.createElement("div", { style: { fontFamily: DS.mono, fontSize: 9, color: DS.textDim, marginTop: 3 } }, p.desc),
+                                hasLocation && React.createElement("div", { style: { fontFamily: DS.mono, fontSize: 9, color: DS.glowGreen, marginTop: 3 } },
+                                    "✓ " + (db?.locations || []).filter(l => l.country === p.key).length + " ubicación(es) configurada(s)"))),
+                        React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 12 } },
+                            React.createElement("span", { style: { fontFamily: DS.sans, fontSize: 12, fontWeight: 600, color: active ? p.color : DS.textDim } },
+                                active ? "ACTIVO" : "INACTIVO"),
+                            React.createElement("button", { onClick: () => toggleCountry(p.key),
+                                style: { position: "relative", width: 54, height: 28, borderRadius: 14, border: "none",
+                                    cursor: "pointer", background: active ? p.color : DS.border, transition: "background .2s" } },
+                                React.createElement("div", { style: { position: "absolute", top: 3, left: active ? 28 : 3,
+                                    width: 22, height: 22, borderRadius: "50%", background: "#fff",
+                                    transition: "left .2s", boxShadow: "0 1px 4px rgba(0,0,0,.3)" } }))));
+                })),
+            React.createElement("div", { style: { padding: "14px 18px", background: `${DS.glowAmber}08`,
+                border: `1px solid ${DS.glowAmber}33`, borderRadius: 8 } },
+                React.createElement("div", { style: { fontFamily: DS.mono, fontSize: 9, color: DS.glowAmber, fontWeight: 700, letterSpacing: "0.1em", marginBottom: 6 } }, "NOTA"),
+                React.createElement("div", { style: { fontFamily: DS.sans, fontSize: 12, color: DS.textDim, lineHeight: 1.6 } },
+                    "Al desactivar un país, no aparecerá en los selectores de nuevo empleado ni en los filtros de nómina. Los empleados existentes y sus registros no se eliminan. Se requiere al menos 1 país activo.")))
+
+        ),
         confirmDel && (React.createElement("div", { style: { position: "fixed", inset: 0, background: "rgba(3,7,18,.92)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 2000, backdropFilter: "blur(10px)" }, onClick: () => setConfirmDel(null) },
             React.createElement("div", { style: { background: DS.bgAlt, border: `1px solid ${DS.glowRed}44`, width: 420, padding: 28, position: "relative", textAlign: "center" }, onClick: e => e.stopPropagation() },
                 React.createElement(HudCorner, { pos: "tl", color: DS.glowRed, size: 10 }),
