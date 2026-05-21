@@ -1162,9 +1162,9 @@ const Avatar = ({ initials = "??", color = "#c8714a", size = 36 }) => {
     return React.createElement("div", { style: s }, (initials || "??").slice(0, 2).toUpperCase());
 };
 
-const LoginScreen = ({ db, onLoginAdmin, onLoginAdmin_server, onLoginEmployee, onServerLogin, t, lang, changeLang }) => {
+const LoginScreen = ({ db, onLoginAdmin, onLoginAdmin_server, onLoginEmployee, onServerLogin, activeEmpsExternal, t, lang, changeLang }) => {
     var _a;
-    const [mode, setMode] = useState(null); // null | "admin" | "employee"
+    const [mode, setMode] = useState(null);
     const [username, setUsername] = useState("");
     const [password, setPassword] = useState("");
     const [showPass, setShowPass] = useState(false);
@@ -1173,26 +1173,11 @@ const LoginScreen = ({ db, onLoginAdmin, onLoginAdmin_server, onLoginEmployee, o
     const [pin, setPin] = useState("");
     const [error, setError] = useState("");
     const [clock, setClock] = useState(new Date());
-    // Empleados cargados desde API (servidor) o localStorage (local)
-    // null = cargando, [] = cargado (vacío o sin servidor), [...] = lista
-    const [activeEmps, setActiveEmps] = useState(null);
+    // Use external activeEmps passed from App — stable, no re-mount issues
+    const activeEmps = activeEmpsExternal;
     useEffect(() => {
         const timer = setInterval(() => setClock(new Date()), 1000);
         return () => clearInterval(timer);
-    }, []);
-    // Cargar empleados activos — endpoint público, sin auth
-    useEffect(() => {
-        window.TC_API.activeEmps()
-            .then(list => {
-                // Use server list only if non-empty, else fall through to db
-                if (Array.isArray(list) && list.length > 0)
-                    setActiveEmps(list);
-                else
-                    setActiveEmps(null); // trigger db fallback
-            })
-            .catch(() => {
-                setActiveEmps(null); // 404/error: show db.employees instead
-            });
     }, []);
     const handleAdminLogin = () => {
         if (!username || !password) { setError(t('login_fill_all')); return; }
@@ -11828,6 +11813,15 @@ function App() {
     const changeLang = (code) => { setLang(code); try { localStorage.setItem("tc_lang", code); } catch(e) {} };
     const { db, loading, reloadFromAPI, upsertEmployee, deleteEmployee, upsertLocation, deleteLocation, upsertDepartment, deleteDepartment, addTimeRecord, updateTimeRecord, savePayrollCut, updatePayrollCut, resetDB, upsertSystemUser, deleteSystemUser, updateAccessRule, updateUserOverrides, updateTaxYtd, updateCompany } = useDB();
     const { session, checking, loginAdmin, loginEmployee, serverLogin, logout, inactivityWarning, resetInactivityTimer } = useAuth(db, reloadFromAPI);
+
+    // ── Active employees list — loaded once at App level, passed to LoginScreen ──
+    const [activeEmpsGlobal, setActiveEmpsGlobal] = useState(null);
+    useEffect(() => {
+        if (!window.TC_API?.IS_SERVER) { setActiveEmpsGlobal([]); return; }
+        window.TC_API.activeEmps()
+            .then(list => setActiveEmpsGlobal(Array.isArray(list) && list.length > 0 ? list : []))
+            .catch(() => setActiveEmpsGlobal([]));
+    }, []);
     // Cuando hay sesión activa en servidor, cargar DB desde PostgreSQL
     useEffect(() => {
         if (session && window.TC_API && window.TC_API.IS_SERVER && reloadFromAPI) {
@@ -11861,8 +11855,9 @@ function App() {
         return (React.createElement(Shell, null,
             React.createElement(LoginScreen, { db: db,
                 onLoginAdmin: loginAdmin,
-                onLoginAdmin_server: serverLogin,
+                onServerLogin: serverLogin,
                 onLoginEmployee: loginEmployee,
+                activeEmpsExternal: activeEmpsGlobal,
                 lang: lang, changeLang: changeLang, t: t })));
     // Employee session → Employee Portal only
     // Doble validación: type correcto + user con campos mínimos
@@ -11877,6 +11872,7 @@ function App() {
                 onLoginAdmin: loginAdmin,
                 onServerLogin: serverLogin,
                 onLoginEmployee: loginEmployee,
+                activeEmpsExternal: activeEmpsGlobal,
                 lang: lang, changeLang: changeLang, t: t })));
     }
     // Admin session → Full system
