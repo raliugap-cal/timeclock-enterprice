@@ -1205,10 +1205,9 @@ const LoginScreen = ({ db, onLoginAdmin, onLoginAdmin_server, onLoginEmployee, o
     const handlePinKey = (digit) => { if (pin.length < 4) setPin(p => p + digit); };
     const handlePinDel = () => setPin(p => p.slice(0, -1));
     // Use server list (no auth needed) or fallback to db
-    // Always show db.employees immediately; replace with server list when available
-    const dbEmps = (db?.employees || []).filter(e => e.status === 'active');
-    const baseList = (activeEmps && activeEmps.length > 0) ? activeEmps : dbEmps;
-    const empList = baseList.filter(e => !empSearch || e.name.toLowerCase().includes(empSearch.toLowerCase()));
+    const dbEmps = ((db?.employees) || []).filter(e => e.status === 'active');
+    const baseList = (Array.isArray(activeEmps) && activeEmps.length > 0) ? activeEmps : dbEmps;
+    const empList = baseList.filter(e => !empSearch || (e.name || '').toLowerCase().includes(empSearch.toLowerCase()));
     const timeStr = clock.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
     const dateStr = clock.toLocaleDateString("es-MX", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
     return (React.createElement("div", { style: { background: DS.bg, minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: DS.sans, color: DS.text, position: "relative", overflow: "hidden" } },
@@ -1291,8 +1290,8 @@ const LoginScreen = ({ db, onLoginAdmin, onLoginAdmin_server, onLoginEmployee, o
                         React.createElement(Search, { size: 13, color: DS.textDim, style: { position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)" } }),
                         React.createElement("input", { value: empSearch, onChange: e => setEmpSearch(e.target.value), placeholder: t("login_search_placeholder"), autoFocus: true, style: { width: "100%", padding: "10px 12px 10px 32px", background: DS.bg, border: `1px solid ${DS.border}`, borderRadius: 8, color: DS.text, fontFamily: DS.sans, fontSize: 13, outline: "none", boxSizing: "border-box" } })),
                     React.createElement("div", { style: { maxHeight: 240, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 } },
-                        (activeEmps === null && dbEmps.length === 0) && (React.createElement("div", { style: { padding: 16, textAlign: "center", fontFamily: DS.mono, fontSize: 11, color: DS.textDim } }, "⏳ Cargando empleados...")),
-                        (activeEmps !== null && empList.length === 0) && (React.createElement("div", { style: { padding: 16, textAlign: "center", fontFamily: DS.sans, fontSize: 13, color: DS.textDim } }, t("login_no_results"))),
+                        (activeEmps === null && dbEmps.length === 0) && (React.createElement("div", { style: { padding: 16, textAlign: "center", fontFamily: DS.mono, fontSize: 11, color: DS.textDim } }, "\u23F3 Cargando empleados...")),
+                        (activeEmps !== null && empList.length === 0 && dbEmps.length === 0) && (React.createElement("div", { style: { padding: 16, textAlign: "center", fontFamily: DS.sans, fontSize: 13, color: DS.textDim } }, t("login_no_results"))),
                         empList.map(emp => {
                             const dept = ((db === null || db === void 0 ? void 0 : db.departments) || []).find(d => d.id === emp.dept);
                             return (React.createElement("button", { key: emp.id, onClick: () => { setSelEmp(emp); setError(""); setPin(""); }, style: { display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", background: DS.surface, border: `1px solid ${DS.border}`, borderRadius: 9, cursor: "pointer", textAlign: "left" }, onMouseEnter: e => { e.currentTarget.style.borderColor = DS.glowGreen; e.currentTarget.style.background = DS.surfaceHi; }, onMouseLeave: e => { e.currentTarget.style.borderColor = DS.border; e.currentTarget.style.background = DS.surface; } },
