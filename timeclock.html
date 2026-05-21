@@ -1359,40 +1359,113 @@ const EmployeePortal = ({ db, session, addTimeRecord, updateTimeRecord, onLogout
     const [clock, setClock] = useState(new Date());
     const [checando, setChecando] = useState(false);
     const [done, setDone] = useState(null); // "entrada" | "salida"
+    const [geoStatus, setGeoStatus] = useState(null); // null | "checking" | "inside" | "outside" | "error"
+    const [geoInfo, setGeoInfo]     = useState(null); // { location, distance }
+
     useEffect(() => {
         const timerId = setInterval(() => setClock(new Date()), 1000);
         return () => clearInterval(timerId);
     }, []);
-    // Active shift today
-    // Buscar turno activo sin importar fecha (puede ser de días anteriores)
-    const activeShift = ((db === null || db === void 0 ? void 0 : db.timeRecords) || []).find(r => r.empId === emp.id && !r.exit);
-    // All shifts this month
-    const myRecords = ((db === null || db === void 0 ? void 0 : db.timeRecords) || []).filter(r => r.empId === emp.id).slice(0, 15);
-    const timeStr = clock.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
-    const dateStr = clock.toLocaleDateString("es-MX", { weekday: "long", year: "numeric", month: "long", day: "numeric" }).toUpperCase();
+
+    // ── Geocerca helper ────────────────────────────────────────────
+    const calcDistance = (lat1, lng1, lat2, lng2) => {
+        const R = 6371000; // metros
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLng = (lng2 - lng1) * Math.PI / 180;
+        const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLng/2)**2;
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    };
+
+    const checkGeoFence = () => new Promise((resolve) => {
+        if (!navigator.geolocation) { resolve({ status: "error", msg: "GPS no disponible" }); return; }
+        navigator.geolocation.getCurrentPosition(
+            pos => {
+                const { latitude, longitude } = pos.coords;
+                const locations = (db?.locations || []).filter(l => l.lat && l.lng && l.radius);
+                // Find the closest location assigned to this employee
+                const empLoc = locations.find(l => l.id === emp.location);
+                const checkLocs = empLoc ? [empLoc] : locations;
+                let best = null;
+                for (const loc of checkLocs) {
+                    const dist = Math.round(calcDistance(latitude, longitude, loc.lat, loc.lng));
+                    if (!best || dist < best.distance) best = { location: loc, distance: dist };
+                }
+                if (!best) { resolve({ status: "error", msg: "No hay ubicaciones configuradas" }); return; }
+                const inside = best.distance <= (best.location.radius || 150);
+                resolve({ status: inside ? "inside" : "outside", location: best.location, distance: best.distance, lat: latitude, lng: longitude });
+            },
+            err => resolve({ status: "error", msg: err.code === 1 ? "Permiso GPS denegado" : "Error al obtener ubicación" }),
+            { timeout: 10000, maximumAge: 30000, enableHighAccuracy: true }
+        );
+    });
+
+    // ── Auto clock-in al cargar el portal ─────────────────────────
+    useEffect(() => {
+        if (activeShift) return; // ya tiene turno activo — no hacer auto clock-in
+        if (!addTimeRecord) return;
+        setGeoStatus("checking");
+        checkGeoFence().then(geo => {
+            setGeoInfo(geo);
+            if (geo.status === "inside") {
+                setGeoStatus("inside");
+                // Clock-in automático por geocerca
+                const now = new Date();
+                const nowStr = now.toTimeString().slice(0,5);
+                const todayStr = now.toISOString().slice(0,10);
+                const status = parseInt(nowStr.split(":")[0]) >= 9 && parseInt(nowStr.split(":")[1]) > 5 ? "tardanza" : "normal";
+                addTimeRecord({ empId: emp.id, date: todayStr, entry: nowStr, exit: null,
+                    type: "geocerca", hours: null, status, approved: true,
+                    geoLocation: geo.location?.name, distance: geo.distance });
+                setDone("entrada_auto");
+                setTimeout(() => setDone(null), 5000);
+            } else {
+                setGeoStatus(geo.status); // "outside" or "error"
+            }
+        });
+    }, []); // Only on mount
+
+    // ── Manual check (cuando GPS falla o está fuera de geocerca) ──
     const handleCheck = () => {
         setChecando(true);
         const now = new Date();
         const nowStr = now.toTimeString().slice(0, 5);
         const action = activeShift ? "salida" : "entrada";
-        setTimeout(() => {
-            if (action === "entrada") {
+
+        if (action === "entrada") {
+            // Verificar geocerca antes de registrar
+            checkGeoFence().then(geo => {
+                setGeoInfo(geo);
+                setGeoStatus(geo.status);
+                const isGeo = geo.status === "inside";
                 const status = parseInt(nowStr.split(":")[0]) >= 9 && parseInt(nowStr.split(":")[1]) > 5 ? "tardanza" : "normal";
-                addTimeRecord({ empId: emp.id, date: today, entry: nowStr, exit: null, type: "portal", hours: null, status, approved: true });
-            }
-            else {
-                // Usar fechas reales — el turno puede cruzar medianoche
-                const shiftDate = activeShift.date || today;
-                const entryDt   = new Date(`${shiftDate}T${activeShift.entry}:00`);
-                const hoursRaw  = (now - entryDt) / 3600000;
-                const hours     = Number(Math.max(0, hoursRaw).toFixed(2));
-                updateTimeRecord(activeShift.id, { exit: nowStr, hours, approvedExit: true });
-            }
-            setChecando(false);
-            setDone(action);
-            setTimeout(() => setDone(null), 4000);
-        }, 1200);
+                addTimeRecord({ empId: emp.id, date: now.toISOString().slice(0,10), entry: nowStr, exit: null,
+                    type: isGeo ? "geocerca" : "portal", hours: null, status,
+                    approved: isGeo, // solo auto-aprobado si está dentro de la geocerca
+                    geoLocation: geo.location?.name, distance: geo.distance });
+                setChecando(false);
+                setDone("entrada");
+                setTimeout(() => setDone(null), 4000);
+            });
+        } else {
+            // Salida — siempre permitida, verificar geocerca para el registro
+            checkGeoFence().then(geo => {
+                const shiftDate = activeShift.date || now.toISOString().slice(0,10);
+                const entryDt = new Date(`${shiftDate}T${activeShift.entry}:00`);
+                const hours = Number(Math.max(0, (now - entryDt) / 3600000).toFixed(2));
+                const isGeo = geo.status === "inside";
+                updateTimeRecord(activeShift.id, { exit: nowStr, hours, approvedExit: true,
+                    exitType: isGeo ? "geocerca" : "portal", exitDistance: geo.distance });
+                setChecando(false);
+                setDone("salida");
+                setTimeout(() => setDone(null), 4000);
+            });
+        }
     };
+    // Active shift — search without date restriction (overnight shifts)
+    const activeShift = ((db?.timeRecords) || []).find(r => r.empId === emp.id && !r.exit);
+    const myRecords   = ((db?.timeRecords) || []).filter(r => r.empId === emp.id).slice(0, 15);
+    const timeStr = clock.toLocaleTimeString("es-MX", { hour:"2-digit", minute:"2-digit", second:"2-digit", hour12:false });
+    const dateStr = clock.toLocaleDateString("es-MX",  { weekday:"long", year:"numeric", month:"long", day:"numeric" }).toUpperCase();
     const payCalc = calcPayrollFromDB(emp, db);
     return (React.createElement("div", { style: { background: DS.bg, minHeight: "100vh", fontFamily: DS.sans, color: DS.text } },
         React.createElement("div", { style: { background: DS.bgAlt, borderBottom: `1px solid ${DS.border}`, padding: "0 28px", height: 56, display: "flex", alignItems: "center", justifyContent: "space-between" } },
@@ -1411,6 +1484,19 @@ const EmployeePortal = ({ db, session, addTimeRecord, updateTimeRecord, onLogout
                     React.createElement(LogOut, { size: 11 }),
                      t("close").toUpperCase()))),
         React.createElement("div", { style: { maxWidth: 700, margin: "0 auto", padding: "32px 24px" } },
+            // ── Geo status banner ────────────────────────────────────
+            geoStatus === "checking" && React.createElement("div", { style: { marginBottom: 16, padding: "12px 16px", background: `${DS.glow}10`, border: `1px solid ${DS.glow}44`, borderRadius: 8, display: "flex", alignItems: "center", gap: 10 } },
+                React.createElement("div", { style: { width: 8, height: 8, borderRadius: "50%", background: DS.glow, animation: "ping 1s ease-in-out infinite" } }),
+                React.createElement("span", { style: { fontFamily: DS.mono, fontSize: 11, color: DS.glow } }, "📡 Verificando geocerca...")),
+            geoStatus === "inside" && done === "entrada_auto" && React.createElement("div", { style: { marginBottom: 16, padding: "14px 18px", background: `${DS.glowGreen}15`, border: `2px solid ${DS.glowGreen}55`, borderRadius: 8 } },
+                React.createElement("div", { style: { fontFamily: DS.sans, fontSize: 14, fontWeight: 800, color: DS.glowGreen, marginBottom: 4 } }, "✅ CHECK-IN AUTOMÁTICO REGISTRADO"),
+                React.createElement("div", { style: { fontFamily: DS.mono, fontSize: 10, color: DS.textDim } }, `📍 ${geoInfo?.location?.name || "Ubicación"} · ${geoInfo?.distance}m del centro de la geocerca`)),
+            geoStatus === "outside" && !activeShift && React.createElement("div", { style: { marginBottom: 16, padding: "12px 16px", background: `${DS.glowAmber}10`, border: `1px solid ${DS.glowAmber}44`, borderRadius: 8 } },
+                React.createElement("div", { style: { fontFamily: DS.sans, fontSize: 12, fontWeight: 700, color: DS.glowAmber, marginBottom: 2 } }, "⚠ Fuera de geocerca"),
+                React.createElement("div", { style: { fontFamily: DS.mono, fontSize: 10, color: DS.textDim } }, `📍 ${geoInfo?.distance}m de ${geoInfo?.location?.name || "la ubicación más cercana"} (radio: ${geoInfo?.location?.radius || 150}m). El registro requerirá aprobación.`)),
+            geoStatus === "error" && React.createElement("div", { style: { marginBottom: 16, padding: "12px 16px", background: `${DS.glowRed}08`, border: `1px solid ${DS.glowRed}33`, borderRadius: 8 } },
+                React.createElement("span", { style: { fontFamily: DS.mono, fontSize: 10, color: DS.glowRed } }, "⚠ GPS: " + (geoInfo?.msg || "Error al obtener ubicación"))),
+            // ── Clock display ────────────────────────────────────────
             React.createElement("div", { style: { textAlign: "center", marginBottom: 36 } },
                 React.createElement("div", { style: { fontFamily: DS.mono, fontSize: 52, fontWeight: 900, color: DS.glow, letterSpacing: "0.05em", lineHeight: 1, textShadow: glowStrong(DS.glow) } }, timeStr),
                 React.createElement("div", { style: { fontFamily: DS.mono, fontSize: 10, color: DS.textDim, marginTop: 6, letterSpacing: "0.15em" } }, dateStr)),
