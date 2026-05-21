@@ -34,7 +34,7 @@ window.TC_API = (function() {
   return {
     IS_SERVER,
     login:    (u, p)  => api('POST', '/api/auth/login', { username: u, password: p }),
-    pinLogin: (pin)   => api('POST', '/api/auth/pin',   { pin: String(pin) }),
+    pinLogin: (pin, empId) => api('POST', '/api/auth/pin', { pin: String(pin), empId }),
     logout:   ()      => api('POST', '/api/auth/logout'),
     whoAmI:   ()      => api('GET',  '/api/auth/me'),
     loadDB:   ()      => api('GET',  '/api/db'),
@@ -1199,7 +1199,7 @@ const LoginScreen = ({ db, onLoginAdmin, onLoginEmployee, onServerLogin, activeE
     const handleEmpLogin = () => {
         if (!selEmp || pin.length !== 4) return;
         if (window.TC_API.IS_SERVER) {
-            window.TC_API.pinLogin(pin)
+            window.TC_API.pinLogin(pin, selEmp.id)
                 .then(data => onLoginEmployee(data.employee))
                 .catch(() => { setError(t('login_error_pin')); setPin(''); });
         } else {
