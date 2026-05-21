@@ -1162,8 +1162,7 @@ const Avatar = ({ initials = "??", color = "#c8714a", size = 36 }) => {
     return React.createElement("div", { style: s }, (initials || "??").slice(0, 2).toUpperCase());
 };
 
-const LoginScreen = ({ db, onLoginAdmin, onLoginAdmin_server, onLoginEmployee, onServerLogin, activeEmpsExternal, t, lang, changeLang }) => {
-    var _a;
+const LoginScreen = ({ db, onLoginAdmin, onLoginEmployee, onServerLogin, activeEmpsExternal, t, lang, changeLang }) => {
     const [mode, setMode] = useState(null);
     const [username, setUsername] = useState("");
     const [password, setPassword] = useState("");
@@ -1173,155 +1172,166 @@ const LoginScreen = ({ db, onLoginAdmin, onLoginAdmin_server, onLoginEmployee, o
     const [pin, setPin] = useState("");
     const [error, setError] = useState("");
     const [clock, setClock] = useState(new Date());
-    // Use external activeEmps passed from App — stable, no re-mount issues
-    const activeEmps = activeEmpsExternal;
+
     useEffect(() => {
         const timer = setInterval(() => setClock(new Date()), 1000);
         return () => clearInterval(timer);
     }, []);
+
+    // Employee list
+    const dbEmps = ((db && db.employees) || []).filter(e => e.status === 'active');
+    const serverEmps = Array.isArray(activeEmpsExternal) && activeEmpsExternal.length > 0 ? activeEmpsExternal : null;
+    const empList = (serverEmps || dbEmps).filter(e =>
+        !empSearch || (e.name || '').toLowerCase().includes(empSearch.toLowerCase()));
+    const loading = !serverEmps && dbEmps.length === 0;
+
     const handleAdminLogin = () => {
         if (!username || !password) { setError(t('login_fill_all')); return; }
         if (window.TC_API.IS_SERVER) {
             window.TC_API.login(username, password)
-                .then(data => { if (onServerLogin) onServerLogin(data.user); else if (onLoginAdmin_server) onLoginAdmin_server(data.user); })
+                .then(data => { if (onServerLogin) onServerLogin(data.user); })
                 .catch(() => setError(t('login_error_user')));
         } else {
             if (!onLoginAdmin(username, password)) setError(t('login_error_user'));
         }
     };
+
     const handleEmpLogin = () => {
         if (!selEmp || pin.length !== 4) return;
         if (window.TC_API.IS_SERVER) {
             window.TC_API.pinLogin(pin)
-                .then(data => { onLoginEmployee(data.employee); })
-                .catch(err => { console.error('[PIN]', err); setError(t('login_error_pin')); setPin(''); });
+                .then(data => onLoginEmployee(data.employee))
+                .catch(() => { setError(t('login_error_pin')); setPin(''); });
         } else {
-            const stored = (db?.employees || []).find(e => e.id === selEmp.id);
-            if (!stored || stored.status !== 'active') { setError(t('login_error_pin')); setPin(''); return; }
-            if ((stored.pin || '1234') !== pin) { setError(t('login_error_pin')); setPin(''); return; }
+            const stored = (db && db.employees || []).find(e => e.id === selEmp.id);
+            if (!stored || stored.status !== 'active' || (stored.pin || '1234') !== pin) {
+                setError(t('login_error_pin')); setPin(''); return;
+            }
             onLoginEmployee(stored);
         }
     };
-    const handlePinKey = (digit) => { if (pin.length < 4) setPin(p => p + digit); };
+
+    const handlePinKey = d => { if (pin.length < 4) setPin(p => p + d); };
     const handlePinDel = () => setPin(p => p.slice(0, -1));
-    // Use server list (no auth needed) or fallback to db
-    const dbEmps = ((db?.employees) || []).filter(e => e.status === 'active');
-    const baseList = (Array.isArray(activeEmps) && activeEmps.length > 0) ? activeEmps : dbEmps;
-    const empList = baseList.filter(e => !empSearch || (e.name || '').toLowerCase().includes(empSearch.toLowerCase()));
-    const timeStr = clock.toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
-    const dateStr = clock.toLocaleDateString("es-MX", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
-    return (React.createElement("div", { style: { background: DS.bg, minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: DS.sans, color: DS.text, position: "relative", overflow: "hidden" } },
-        React.createElement("div", { style: { position: "fixed", inset: 0, pointerEvents: "none", zIndex: 0,
-                background: `radial-gradient(ellipse 70% 60% at 30% 20%, ${DS.glow}0c 0%, transparent 60%), radial-gradient(ellipse 50% 40% at 80% 80%, ${DS.glowAmber}08 0%, transparent 55%)` } }),
-        React.createElement("div", { style: { position: "fixed", top: 0, left: 0, right: 0, height: 56, borderBottom: `1px solid ${DS.border}`, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 28px", zIndex: 10, background: `${DS.bgAlt}cc`, backdropFilter: "blur(8px)" } },
+
+    const timeStr = clock.toLocaleTimeString("es-MX", { hour:"2-digit", minute:"2-digit", second:"2-digit", hour12:false });
+    const dateStr = clock.toLocaleDateString("es-MX",  { weekday:"long", year:"numeric", month:"long", day:"numeric" });
+
+    return React.createElement("div", { style: { background: DS.bg, minHeight: "100vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", fontFamily: DS.sans, color: DS.text } },
+
+        // Header
+        React.createElement("div", { style: { position: "fixed", top: 0, left: 0, right: 0, padding: "0 32px", height: 60, display: "flex", alignItems: "center", justifyContent: "space-between", background: DS.bgAlt, borderBottom: `1px solid ${DS.border}`, zIndex: 10 } },
             React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10 } },
-                React.createElement("div", { style: { width: 30, height: 30, borderRadius: 9, background: `${DS.glow}25`, display: "flex", alignItems: "center", justifyContent: "center" } },
-                    React.createElement(Cpu, { size: 15, color: DS.glow })),
-                React.createElement("span", { style: { fontFamily: DS.sans, fontWeight: 800, fontSize: 16, color: DS.text } }, t("system_name")),
+                React.createElement("span", { style: { fontFamily: DS.sans, fontWeight: 800, fontSize: 16, color: DS.text } }, "TimeClock"),
                 React.createElement("span", { style: { fontFamily: DS.sans, fontSize: 11, color: DS.glowGreen, fontWeight: 600, background: `${DS.glowGreen}18`, border: `1px solid ${DS.glowGreen}30`, borderRadius: 20, padding: "2px 10px" } }, "Enterprise")),
-            React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 16 } },
-                React.createElement("div", { style: { display: "flex", gap: 4 } },
-                    LANGUAGES.map(l => React.createElement("button", {
-                        key: l.code, onClick: () => changeLang(l.code), title: l.label,
+            React.createElement("div", { style: { display: "flex", gap: 4 } },
+                (typeof LANGUAGES !== 'undefined' ? LANGUAGES : []).map(l =>
+                    React.createElement("button", { key: l.code, onClick: () => changeLang(l.code), title: l.label,
                         style: { padding: "3px 7px", borderRadius: 6, cursor: "pointer", fontSize: 14,
                             border: lang === l.code ? `1px solid ${DS.glow}80` : `1px solid ${DS.border}`,
-                            background: lang === l.code ? `${DS.glow}20` : "transparent", transition: "all .12s" }
-                    }, l.flag))),
-                React.createElement("div", { style: { textAlign: "right" } },
-                    React.createElement("div", { style: { fontFamily: DS.mono, fontSize: 18, fontWeight: 600, color: DS.glow, lineHeight: 1 } }, timeStr),
-                    React.createElement("div", { style: { fontFamily: DS.sans, fontSize: 11, color: DS.textDim, marginTop: 2, fontWeight: 500 } }, dateStr)))),
-        !mode && (React.createElement("div", { style: { position: "relative", zIndex: 1, textAlign: "center", maxWidth: 540, width: "100%", padding: "0 24px" } },
-            React.createElement("div", { style: { marginBottom: 8, fontFamily: DS.sans, fontSize: 13, color: DS.textMid, fontWeight: 500 } }, t("login_welcome")),
-            React.createElement("div", { style: { marginBottom: 40, fontFamily: DS.sans, fontSize: 30, fontWeight: 800, color: DS.text } }, t("login_question")),
-            React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 } },
-                React.createElement("button", { onClick: () => { setMode("employee"); setError(""); }, style: { background: DS.surface, border: `1px solid ${DS.glowGreen}40`, borderRadius: 14, padding: "32px 20px", cursor: "pointer", textAlign: "center", transition: "all .2s", boxShadow: "0 2px 12px rgba(0,0,0,.2)" }, onMouseEnter: e => { e.currentTarget.style.borderColor = DS.glowGreen; e.currentTarget.style.background = DS.surfaceHi; }, onMouseLeave: e => { e.currentTarget.style.borderColor = `${DS.glowGreen}40`; e.currentTarget.style.background = DS.surface; } },
-                    React.createElement("div", { style: { width: 64, height: 64, borderRadius: "50%", border: `2px solid ${DS.glowGreen}50`, margin: "0 auto 16px", display: "flex", alignItems: "center", justifyContent: "center", background: `${DS.glowGreen}15` } },
-                        React.createElement(Users, { size: 28, color: DS.glowGreen })),
-                    React.createElement("div", { style: { fontFamily: DS.sans, fontSize: 17, fontWeight: 700, color: DS.glowGreen, marginBottom: 6 } }, t("login_employee")),
-                    React.createElement("div", { style: { fontFamily: DS.sans, fontSize: 12, color: DS.textDim, lineHeight: 1.6, fontWeight: 500 } }, t("login_employee_sub"))),
-                React.createElement("button", { onClick: () => { setMode("admin"); setError(""); }, style: { background: DS.surface, border: `1px solid ${DS.glow}40`, borderRadius: 14, padding: "32px 20px", cursor: "pointer", textAlign: "center", transition: "all .2s", boxShadow: "0 2px 12px rgba(0,0,0,.2)" }, onMouseEnter: e => { e.currentTarget.style.borderColor = DS.glow; e.currentTarget.style.background = DS.surfaceHi; }, onMouseLeave: e => { e.currentTarget.style.borderColor = `${DS.glow}40`; e.currentTarget.style.background = DS.surface; } },
-                    React.createElement("div", { style: { width: 64, height: 64, borderRadius: "50%", border: `2px solid ${DS.glow}50`, margin: "0 auto 16px", display: "flex", alignItems: "center", justifyContent: "center", background: `${DS.glow}15` } },
-                        React.createElement(Shield, { size: 28, color: DS.glow })),
-                    React.createElement("div", { style: { fontFamily: DS.sans, fontSize: 17, fontWeight: 700, color: DS.glow, marginBottom: 6 } }, t("login_admin")),
-                    React.createElement("div", { style: { fontFamily: DS.sans, fontSize: 12, color: DS.textDim, lineHeight: 1.6, fontWeight: 500 } },
-                        t("login_full_access"),
-                        React.createElement("br", null),
-                        "al sistema"))),
-            React.createElement("div", { style: { marginTop: 20, fontFamily: DS.sans, fontSize: 12, color: DS.textDim, fontWeight: 500 } },
-                t("login_pin_demo") + " ",
-                React.createElement("span", { style: { color: DS.glowAmber } }, "1234"),
-                " · " + t("login_admin_demo") + " ",
-                React.createElement("span", { style: { color: DS.glowAmber } }, "admin / admin123")))),
-        mode === "admin" && (React.createElement("div", { style: { position: "relative", zIndex: 1, width: "100%", maxWidth: 400, padding: "0 24px" } },
-            React.createElement("div", { style: { background: DS.bgAlt, border: `1px solid ${DS.border}`, borderRadius: 16, padding: "32px 28px", boxShadow: "0 4px 24px rgba(0,0,0,.25)" } },
-                React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10, marginBottom: 22 } },
-                    React.createElement("div", { style: { width: 4, height: 20, background: DS.glow, borderRadius: 2 } }),
-                    React.createElement(Shield, { size: 16, color: DS.glow }),
-                    React.createElement("span", { style: { fontFamily: DS.sans, fontSize: 15, fontWeight: 700, color: DS.text } }, t("login_admin_title"))),
-                error && (React.createElement("div", { style: { marginBottom: 14, padding: "10px 14px", background: `${DS.glowRed}12`, border: `1px solid ${DS.glowRed}40`, borderRadius: 8, display: "flex", gap: 8, alignItems: "center" } },
-                    React.createElement(AlertCircle, { size: 13, color: DS.glowRed }),
-                    React.createElement("span", { style: { fontFamily: DS.sans, fontSize: 12, color: DS.glowRed, fontWeight: 500 } }, error))),
+                            background: lang === l.code ? `${DS.glow}20` : "transparent" } }, l.flag))),
+            React.createElement("div", { style: { textAlign: "right" } },
+                React.createElement("div", { style: { fontFamily: DS.mono, fontSize: 16, fontWeight: 600, color: DS.glow } }, timeStr),
+                React.createElement("div", { style: { fontFamily: DS.mono, fontSize: 9, color: DS.textDim, marginTop: 1 } }, dateStr))),
+
+        // Content
+        React.createElement("div", { style: { marginTop: 60, width: "100%", maxWidth: 480, padding: "40px 24px" } },
+
+            // Mode select
+            !mode && React.createElement("div", { style: { textAlign: "center" } },
+                React.createElement("div", { style: { fontFamily: DS.sans, fontSize: 28, fontWeight: 800, color: DS.text, marginBottom: 8 } }, t("login_question")),
+                React.createElement("div", { style: { fontFamily: DS.sans, fontSize: 13, color: DS.textDim, marginBottom: 36 } }, t("login_welcome")),
+                React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 } },
+                    React.createElement("button", { onClick: () => { setMode("employee"); setError(""); },
+                        style: { background: DS.bgAlt, border: `1px solid ${DS.glowGreen}40`, borderRadius: 14, padding: "28px 20px", cursor: "pointer", textAlign: "center" } },
+                        React.createElement("div", { style: { fontSize: 36, marginBottom: 12 } }, "👤"),
+                        React.createElement("div", { style: { fontFamily: DS.sans, fontSize: 15, fontWeight: 700, color: DS.glowGreen } }, t("login_employee")),
+                        React.createElement("div", { style: { fontFamily: DS.sans, fontSize: 11, color: DS.textDim, marginTop: 4 } }, "PIN de 4 dígitos")),
+                    React.createElement("button", { onClick: () => { setMode("admin"); setError(""); },
+                        style: { background: DS.bgAlt, border: `1px solid ${DS.glow}40`, borderRadius: 14, padding: "28px 20px", cursor: "pointer", textAlign: "center" } },
+                        React.createElement("div", { style: { fontSize: 36, marginBottom: 12 } }, "🔐"),
+                        React.createElement("div", { style: { fontFamily: DS.sans, fontSize: 15, fontWeight: 700, color: DS.glow } }, t("login_admin")),
+                        React.createElement("div", { style: { fontFamily: DS.sans, fontSize: 11, color: DS.textDim, marginTop: 4 } }, "Usuario y contraseña")))),
+
+            // Admin login
+            mode === "admin" && React.createElement("div", { style: { background: DS.bgAlt, border: `1px solid ${DS.border}`, borderRadius: 16, padding: "28px" } },
+                React.createElement("div", { style: { fontFamily: DS.sans, fontSize: 16, fontWeight: 700, color: DS.text, marginBottom: 20 } }, t("login_admin_title")),
+                error && React.createElement("div", { style: { marginBottom: 12, padding: "10px 14px", background: `${DS.glowRed}12`, border: `1px solid ${DS.glowRed}40`, borderRadius: 8, color: DS.glowRed, fontFamily: DS.sans, fontSize: 12 } }, error),
                 React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 14 } },
                     React.createElement("div", null,
-                        React.createElement("div", { style: { fontFamily: DS.sans, fontSize: 12, color: DS.textMid, marginBottom: 6, fontWeight: 500 } }, t("login_user")),
-                        React.createElement("input", { value: username, onChange: e => { setUsername(e.target.value); setError(""); }, onKeyDown: e => e.key === "Enter" && handleAdminLogin(), placeholder: "admin", style: { width: "100%", padding: "10px 12px", background: DS.bg, border: `1px solid ${DS.border}`, borderRadius: 8, color: DS.text, fontFamily: DS.sans, fontSize: 13, outline: "none", boxSizing: "border-box" } })),
+                        React.createElement("div", { style: { fontFamily: DS.sans, fontSize: 12, color: DS.textMid, marginBottom: 6 } }, t("login_user")),
+                        React.createElement("input", { value: username, onChange: e => { setUsername(e.target.value); setError(""); },
+                            onKeyDown: e => e.key === "Enter" && handleAdminLogin(),
+                            placeholder: "admin", style: { width: "100%", padding: "10px 12px", background: DS.bg, border: `1px solid ${DS.border}`, borderRadius: 8, color: DS.text, fontFamily: DS.sans, fontSize: 13, outline: "none", boxSizing: "border-box" } })),
                     React.createElement("div", null,
-                        React.createElement("div", { style: { fontFamily: DS.sans, fontSize: 12, color: DS.textMid, marginBottom: 6, fontWeight: 500 } }, t("login_password")),
-                        React.createElement("div", { style: { position: "relative" } },
-                            React.createElement("input", { value: password, onChange: e => { setPassword(e.target.value); setError(""); }, onKeyDown: e => e.key === "Enter" && handleAdminLogin(), type: showPass ? "text" : "password", placeholder: "••••••••", style: { width: "100%", padding: "10px 38px 10px 12px", background: DS.bg, border: `1px solid ${DS.border}`, borderRadius: 8, color: DS.text, fontFamily: DS.sans, fontSize: 13, outline: "none", boxSizing: "border-box" } }),
-                            React.createElement("button", { onClick: () => setShowPass(p => !p), style: { position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: DS.textDim } },
-                                React.createElement(Eye, { size: 14 }))))),
-                React.createElement("button", { onClick: handleAdminLogin, style: { marginTop: 20, width: "100%", padding: "12px", background: `${DS.glow}22`, border: `1px solid ${DS.glow}50`, borderRadius: 9, color: DS.glow, fontFamily: DS.sans, fontSize: 14, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 } },
-                    React.createElement(Lock, { size: 14 }),
+                        React.createElement("div", { style: { fontFamily: DS.sans, fontSize: 12, color: DS.textMid, marginBottom: 6 } }, t("login_password")),
+                        React.createElement("input", { value: password, onChange: e => { setPassword(e.target.value); setError(""); },
+                            onKeyDown: e => e.key === "Enter" && handleAdminLogin(),
+                            type: showPass ? "text" : "password", placeholder: "••••••••",
+                            style: { width: "100%", padding: "10px 12px", background: DS.bg, border: `1px solid ${DS.border}`, borderRadius: 8, color: DS.text, fontFamily: DS.sans, fontSize: 13, outline: "none", boxSizing: "border-box" } }))),
+                React.createElement("button", { onClick: handleAdminLogin,
+                    style: { marginTop: 20, width: "100%", padding: "12px", background: `${DS.glow}22`, border: `1px solid ${DS.glow}50`, borderRadius: 9, color: DS.glow, fontFamily: DS.sans, fontSize: 14, fontWeight: 700, cursor: "pointer" } },
                     t("login_enter")),
-                React.createElement("button", { onClick: () => { setMode(null); setError(""); setUsername(""); setPassword(""); }, style: { marginTop: 10, width: "100%", padding: "8px", background: "transparent", border: "none", color: DS.textDim, fontFamily: DS.sans, fontSize: 12, cursor: "pointer" } }, t("login_back"))))),
-        mode === "employee" && (React.createElement("div", { style: { position: "relative", zIndex: 1, width: "100%", maxWidth: 480, padding: "0 24px" } },
-            React.createElement("div", { style: { background: DS.bgAlt, border: `1px solid ${DS.border}`, borderRadius: 16, padding: "28px", boxShadow: "0 4px 24px rgba(0,0,0,.25)" } },
-                React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10, marginBottom: 20 } },
-                    React.createElement("div", { style: { width: 4, height: 20, background: DS.glowGreen, borderRadius: 2 } }),
-                    React.createElement(Users, { size: 16, color: DS.glowGreen }),
-                    React.createElement("span", { style: { fontFamily: DS.sans, fontSize: 15, fontWeight: 700, color: DS.text } }, selEmp ? selEmp.name : t("login_employee_title"))),
-                error && (React.createElement("div", { style: { marginBottom: 12, padding: "10px 14px", background: `${DS.glowRed}12`, border: `1px solid ${DS.glowRed}40`, borderRadius: 8, display: "flex", gap: 8, alignItems: "center" } },
-                    React.createElement(AlertCircle, { size: 13, color: DS.glowRed }),
-                    React.createElement("span", { style: { fontFamily: DS.sans, fontSize: 12, color: DS.glowRed, fontWeight: 500 } }, error))),
-                !selEmp && (React.createElement("div", null,
-                    React.createElement("div", { style: { fontFamily: DS.sans, fontSize: 12, color: DS.textMid, marginBottom: 8, fontWeight: 500 } }, t("login_search_name")),
-                    React.createElement("div", { style: { position: "relative", marginBottom: 12 } },
-                        React.createElement(Search, { size: 13, color: DS.textDim, style: { position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)" } }),
-                        React.createElement("input", { value: empSearch, onChange: e => setEmpSearch(e.target.value), placeholder: t("login_search_placeholder"), autoFocus: true, style: { width: "100%", padding: "10px 12px 10px 32px", background: DS.bg, border: `1px solid ${DS.border}`, borderRadius: 8, color: DS.text, fontFamily: DS.sans, fontSize: 13, outline: "none", boxSizing: "border-box" } })),
-                    React.createElement("div", { style: { maxHeight: 240, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 } },
-                        (activeEmps === null && dbEmps.length === 0) && (React.createElement("div", { style: { padding: 16, textAlign: "center", fontFamily: DS.mono, fontSize: 11, color: DS.textDim } }, "\u23F3 Cargando empleados...")),
-                        (activeEmps !== null && empList.length === 0 && dbEmps.length === 0) && (React.createElement("div", { style: { padding: 16, textAlign: "center", fontFamily: DS.sans, fontSize: 13, color: DS.textDim } }, t("login_no_results"))),
-                        empList.map(emp => {
-                            const dept = ((db === null || db === void 0 ? void 0 : db.departments) || []).find(d => d.id === emp.dept);
-                            return (React.createElement("button", { key: emp.id, onClick: () => { setSelEmp(emp); setError(""); setPin(""); }, style: { display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", background: DS.surface, border: `1px solid ${DS.border}`, borderRadius: 9, cursor: "pointer", textAlign: "left" }, onMouseEnter: e => { e.currentTarget.style.borderColor = DS.glowGreen; e.currentTarget.style.background = DS.surfaceHi; }, onMouseLeave: e => { e.currentTarget.style.borderColor = DS.border; e.currentTarget.style.background = DS.surface; } },
-                                React.createElement(Avatar, { initials: emp.avatar || "??", color: (dept === null || dept === void 0 ? void 0 : dept.color) || DS.glowGreen, size: 36 }),
-                                React.createElement("div", null,
-                                    React.createElement("div", { style: { fontFamily: DS.sans, fontSize: 13, fontWeight: 700, color: DS.text } }, emp.name),
-                                    React.createElement("div", { style: { fontFamily: DS.sans, fontSize: 11, color: DS.textDim, fontWeight: 500 } }, emp.role || "—")),
-                                React.createElement(ChevronRight, { size: 14, color: DS.textDim, style: { marginLeft: "auto" } })));
-                        })))),
-                selEmp && (React.createElement("div", null,
-                    React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", background: DS.surface, border: `1px solid ${DS.glowGreen}40`, borderRadius: 10, marginBottom: 20 } },
-                        React.createElement(Avatar, { initials: (selEmp.avatar || selEmp.name || "?").slice(0,2), color: DS.glowGreen, size: 44 }),
-                        React.createElement("div", { style: { flex: 1 } },
-                            React.createElement("div", { style: { fontFamily: DS.sans, fontSize: 16, fontWeight: 700, color: DS.text } }, selEmp.name),
-                            React.createElement("div", { style: { fontFamily: DS.sans, fontSize: 12, color: DS.textDim, fontWeight: 500 } }, selEmp.role || "Empleado")),
-                        React.createElement("button", { onClick: () => { setSelEmp(null); setPin(""); setError(""); }, style: { background: "none", border: "none", color: DS.textDim, cursor: "pointer" } },
-                            React.createElement(X, { size: 14 }))),
-                    React.createElement("div", { style: { fontFamily: DS.sans, fontSize: 13, color: DS.textMid, textAlign: "center", marginBottom: 16, fontWeight: 500 } }, t("login_pin_instruction")),
-                    React.createElement("div", { style: { display: "flex", gap: 12, justifyContent: "center", marginBottom: 20 } }, [0,1,2,3].map(i => React.createElement("div", { key: i, style: { width: 16, height: 16, borderRadius: "50%", border: `2px solid ${pin.length > i ? DS.glowGreen : DS.border}`, background: pin.length > i ? DS.glowGreen : "transparent", transition: "all .15s" } }))),
-                    React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, maxWidth: 240, margin: "0 auto 16px" } },
-                        [1,2,3,4,5,6,7,8,9,"",0,"⌫"].map((k,i) => React.createElement("button", { key: i,
+                React.createElement("button", { onClick: () => { setMode(null); setError(""); },
+                    style: { marginTop: 10, width: "100%", padding: "8px", background: "transparent", border: "none", color: DS.textDim, fontFamily: DS.sans, fontSize: 12, cursor: "pointer" } }, t("login_back"))),
+
+            // Employee login — STEP 1: select employee
+            mode === "employee" && !selEmp && React.createElement("div", { style: { background: DS.bgAlt, border: `1px solid ${DS.border}`, borderRadius: 16, padding: "28px" } },
+                React.createElement("div", { style: { fontFamily: DS.sans, fontSize: 16, fontWeight: 700, color: DS.glowGreen, marginBottom: 16 } }, t("login_employee_title")),
+                error && React.createElement("div", { style: { marginBottom: 12, padding: "10px 14px", background: `${DS.glowRed}12`, border: `1px solid ${DS.glowRed}40`, borderRadius: 8, color: DS.glowRed, fontFamily: DS.sans, fontSize: 12 } }, error),
+                React.createElement("input", { value: empSearch, onChange: e => setEmpSearch(e.target.value),
+                    placeholder: t("login_search_placeholder"), autoFocus: true,
+                    style: { width: "100%", padding: "10px 12px", background: DS.bg, border: `1px solid ${DS.border}`, borderRadius: 8, color: DS.text, fontFamily: DS.sans, fontSize: 13, outline: "none", boxSizing: "border-box", marginBottom: 12 } }),
+                loading && React.createElement("div", { style: { padding: 16, textAlign: "center", fontFamily: DS.mono, fontSize: 11, color: DS.textDim } }, "⏳ Cargando empleados..."),
+                !loading && empList.length === 0 && React.createElement("div", { style: { padding: 16, textAlign: "center", color: DS.textDim, fontFamily: DS.sans, fontSize: 13 } }, t("login_no_results")),
+                React.createElement("div", { style: { maxHeight: 280, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 } },
+                    empList.map(emp => {
+                        const dept = ((db && db.departments) || []).find(d => d.id === emp.dept);
+                        return React.createElement("button", { key: emp.id,
+                            onClick: () => { setSelEmp(emp); setError(""); setPin(""); },
+                            style: { display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", background: DS.surface, border: `1px solid ${DS.border}`, borderRadius: 9, cursor: "pointer", textAlign: "left", width: "100%" } },
+                            React.createElement(Avatar, { initials: emp.avatar || (emp.name||'?').slice(0,2), color: (dept && dept.color) || DS.glowGreen, size: 36 }),
+                            React.createElement("div", { style: { flex: 1 } },
+                                React.createElement("div", { style: { fontFamily: DS.sans, fontSize: 13, fontWeight: 700, color: DS.text } }, emp.name),
+                                React.createElement("div", { style: { fontFamily: DS.sans, fontSize: 11, color: DS.textDim } }, (emp.role || '') + (dept ? ' · ' + dept.name : ''))));
+                    })),
+                React.createElement("button", { onClick: () => { setMode(null); setError(""); },
+                    style: { marginTop: 12, width: "100%", padding: "8px", background: "transparent", border: "none", color: DS.textDim, fontFamily: DS.sans, fontSize: 12, cursor: "pointer" } }, t("login_back"))),
+
+            // Employee login — STEP 2: enter PIN
+            mode === "employee" && selEmp && React.createElement("div", { style: { background: DS.bgAlt, border: `1px solid ${DS.border}`, borderRadius: 16, padding: "28px" } },
+                React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", background: DS.surface, border: `1px solid ${DS.glowGreen}40`, borderRadius: 10, marginBottom: 20 } },
+                    React.createElement(Avatar, { initials: selEmp.avatar || (selEmp.name||'?').slice(0,2), color: DS.glowGreen, size: 44 }),
+                    React.createElement("div", { style: { flex: 1 } },
+                        React.createElement("div", { style: { fontFamily: DS.sans, fontSize: 16, fontWeight: 700, color: DS.text } }, selEmp.name),
+                        React.createElement("div", { style: { fontFamily: DS.sans, fontSize: 12, color: DS.textDim } }, selEmp.role || "Empleado")),
+                    React.createElement("button", { onClick: () => { setSelEmp(null); setPin(""); setError(""); },
+                        style: { background: "none", border: "none", color: DS.textDim, cursor: "pointer", fontSize: 18 } }, "✕")),
+                error && React.createElement("div", { style: { marginBottom: 12, padding: "10px 14px", background: `${DS.glowRed}12`, border: `1px solid ${DS.glowRed}40`, borderRadius: 8, color: DS.glowRed, fontFamily: DS.sans, fontSize: 12 } }, error),
+                React.createElement("div", { style: { textAlign: "center", fontFamily: DS.sans, fontSize: 13, color: DS.textMid, marginBottom: 16 } }, t("login_pin_instruction")),
+                React.createElement("div", { style: { display: "flex", gap: 12, justifyContent: "center", marginBottom: 20 } },
+                    [0,1,2,3].map(i => React.createElement("div", { key: i,
+                        style: { width: 16, height: 16, borderRadius: "50%", border: `2px solid ${pin.length > i ? DS.glowGreen : DS.border}`, background: pin.length > i ? DS.glowGreen : "transparent" } }))),
+                React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, maxWidth: 240, margin: "0 auto 16px" } },
+                    [1,2,3,4,5,6,7,8,9,"",0,"⌫"].map((k,i) =>
+                        React.createElement("button", { key: i,
                             onClick: () => { if (k === "⌫") handlePinDel(); else if (k !== "") handlePinKey(String(k)); setError(""); },
-                            style: { padding: "15px 0", background: k === "⌫" ? `${DS.glowRed}12` : DS.surface, border: `1px solid ${k === "⌫" ? DS.glowRed+"40" : DS.border}`, borderRadius: 9, color: k === "⌫" ? DS.glowRed : DS.text, fontFamily: DS.mono, fontSize: 18, fontWeight: 600, cursor: k === "" ? "default" : "pointer", opacity: k === "" ? 0 : 1 }, disabled: k === "" }, k))),
-                    React.createElement("button", { onClick: handleEmpLogin, disabled: pin.length !== 4,
-                        style: { width: "100%", padding: "12px", background: pin.length === 4 ? `${DS.glowGreen}22` : "transparent", border: `1px solid ${pin.length === 4 ? DS.glowGreen+"55" : DS.border}`, borderRadius: 9, color: pin.length === 4 ? DS.glowGreen : DS.textDim, fontFamily: DS.sans, fontSize: 14, fontWeight: 700, cursor: pin.length === 4 ? "pointer" : "not-allowed", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 } },
-                        React.createElement(CheckCircle, { size: 15 }), t("login_confirm")))),
-                React.createElement("button", { onClick: () => { setMode(null); setError(""); setSelEmp(null); setPin(""); setEmpSearch(""); }, style: { marginTop: 12, width: "100%", padding: "8px", background: "transparent", border: "none", color: DS.textDim, fontFamily: DS.sans, fontSize: 12, cursor: "pointer" } }, t("login_back")))),
-        React.createElement("div", { style: { position: "fixed", bottom: 14, left: 0, right: 0, textAlign: "center", fontFamily: DS.sans, fontSize: 11, color: DS.textDim, fontWeight: 500, zIndex: 1 } }, t("footer")))));
+                            disabled: k === "",
+                            style: { padding: "15px 0", background: k === "⌫" ? `${DS.glowRed}12` : DS.surface,
+                                border: `1px solid ${k === "⌫" ? DS.glowRed+"44" : DS.border}`,
+                                borderRadius: 9, color: k === "⌫" ? DS.glowRed : DS.text,
+                                fontFamily: DS.mono, fontSize: 18, fontWeight: 600,
+                                cursor: k === "" ? "default" : "pointer", opacity: k === "" ? 0 : 1 } }, k))),
+                React.createElement("button", { onClick: handleEmpLogin, disabled: pin.length !== 4,
+                    style: { width: "100%", padding: "12px", background: pin.length === 4 ? `${DS.glowGreen}22` : "transparent",
+                        border: `1px solid ${pin.length === 4 ? DS.glowGreen+"55" : DS.border}`,
+                        borderRadius: 9, color: pin.length === 4 ? DS.glowGreen : DS.textDim,
+                        fontFamily: DS.sans, fontSize: 14, fontWeight: 700, cursor: pin.length === 4 ? "pointer" : "not-allowed" } },
+                    t("login_confirm"))),
+
+            // Footer
+            React.createElement("div", { style: { textAlign: "center", marginTop: 24, fontFamily: DS.sans, fontSize: 11, color: DS.textDim } }, t("footer"))));
 };
-// ═══════════════════════════════════════════════
 //  EMPLOYEE PORTAL — Vista del empleado al hacer login
 // ═══════════════════════════════════════════════
 const EmployeePortal = ({ db, session, addTimeRecord, updateTimeRecord, onLogout }) => {
