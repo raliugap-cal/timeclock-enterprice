@@ -6167,13 +6167,13 @@ const ViewDepartments = ({ db, upsertDepartment, deleteDepartment }) => {
     const [error, setError] = useState("");
     const openNew = () => {
         setError("");
-        setForm({ name: "", color: "#00d4ff", budget: "", head_id: "" });
+        setForm({ name: "", color: "#00d4ff", budget: "", head_id: "", cost_center: "", max_employees: "" });
         setEditMode(false);
         setModal(true);
     };
     const openEdit = (dept) => {
         setError("");
-        setForm(Object.assign(Object.assign({}, dept), { budget: String(dept.budget || "") }));
+        setForm(Object.assign(Object.assign({}, dept), { budget: String(dept.budget || ""), max_employees: String(dept.max_employees || ""), cost_center: dept.cost_center || "" }));
         setEditMode(true);
         setModal(true);
     };
@@ -6183,7 +6183,11 @@ const ViewDepartments = ({ db, upsertDepartment, deleteDepartment }) => {
             return;
         }
         setError("");
-        const record = Object.assign(Object.assign(Object.assign({}, form), { budget: Number(form.budget) || 0 }), (editMode && form.id ? { id: form.id } : {}));
+        const record = Object.assign(Object.assign(Object.assign({}, form), {
+            budget: Number(form.budget) || 0,
+            max_employees: Number(form.max_employees) || 0,
+            cost_center: (form.cost_center || "").trim(),
+        }), (editMode && form.id ? { id: form.id } : {}));
         upsertDepartment(record);
         setSaved(true);
         setTimeout(() => setSaved(false), 2500);
@@ -6245,7 +6249,14 @@ const ViewDepartments = ({ db, upsertDepartment, deleteDepartment }) => {
                 React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 } },
                     React.createElement("div", { style: { padding: "10px 12px", background: DS.bgAlt, border: `1px solid ${DS.border}` } },
                         React.createElement("div", { style: { fontFamily: DS.mono, fontSize: 8, color: DS.textDim, letterSpacing: "0.1em" } }, "MIEMBROS ACTIVOS"),
-                        React.createElement("div", { style: { fontFamily: DS.mono, fontSize: 22, fontWeight: 900, color, marginTop: 4, lineHeight: 1 } }, members.length),
+                        React.createElement("div", { style: { fontFamily: DS.mono, fontSize: 22, fontWeight: 900, color, marginTop: 4, lineHeight: 1 } },
+                            members.length,
+                            dept.max_employees > 0 && React.createElement("span", { style: { fontSize: 13, color: DS.textDim, fontWeight: 400 } }, " / " + dept.max_employees)),
+                        dept.max_employees > 0 && React.createElement("div", { style: { marginTop: 6, height: 4, background: DS.border, borderRadius: 2, overflow: "hidden" } },
+                            React.createElement("div", { style: { height: "100%", width: `${Math.min(100, (members.length / dept.max_employees) * 100)}%`,
+                                background: members.length >= dept.max_employees ? DS.glowRed : members.length >= dept.max_employees * 0.8 ? DS.glowAmber : color,
+                                transition: "width .5s ease" } })),
+                        dept.max_employees > 0 && members.length >= dept.max_employees && React.createElement("div", { style: { fontFamily: DS.mono, fontSize: 8, color: DS.glowRed, marginTop: 4, fontWeight: 700 } }, "⚠ CAPACIDAD MÁXIMA"),
                         React.createElement("div", { style: { fontFamily: DS.mono, fontSize: 9, color: DS.textDim, marginTop: 2 } }, "empleados")),
                     React.createElement("div", { style: { padding: "10px 12px", background: DS.bgAlt, border: `1px solid ${DS.border}` } },
                         React.createElement("div", { style: { fontFamily: DS.mono, fontSize: 8, color: DS.textDim, letterSpacing: "0.1em" } }, "PRESUPUESTO"),
@@ -6268,6 +6279,10 @@ const ViewDepartments = ({ db, upsertDepartment, deleteDepartment }) => {
                         (dept.budget || 0).toLocaleString()))),
                 React.createElement("div", { style: { borderTop: `1px solid ${DS.border}`, paddingTop: 12 } },
                     headEmp && (React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 10 } },
+                    dept.cost_center && (React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 8, marginBottom: 10 } },
+                        React.createElement(Briefcase, { size: 10, color: DS.textDim }),
+                        React.createElement("span", { style: { fontFamily: DS.mono, fontSize: 9, color: DS.textDim } }, "CENTRO DE COSTOS:"),
+                        React.createElement("span", { style: { fontFamily: DS.mono, fontSize: 10, fontWeight: 700, color, background: `${color}15`, border: `1px solid ${color}44`, padding: "1px 8px", borderRadius: 4 } }, dept.cost_center))),
                         React.createElement(Shield, { size: 10, color: color }),
                         React.createElement("span", { style: { fontFamily: DS.mono, fontSize: 9, color: DS.textDim } }, "JEFE:"),
                         React.createElement(Avatar, { initials: headEmp.avatar || "??", color: color, size: 20 }),
@@ -6314,7 +6329,10 @@ const ViewDepartments = ({ db, upsertDepartment, deleteDepartment }) => {
                         React.createElement("div", { style: { width: 10, height: 10, borderRadius: "50%", background: form.color || DS.glow, boxShadow: `0 0 8px ${form.color || DS.glow}` } }),
                         React.createElement("span", { style: { fontFamily: DS.mono, fontSize: 11, fontWeight: 700, color: form.color || DS.glow } }, form.name || "NOMBRE DEL DEPARTAMENTO"))),
                 React.createElement(Input, { label: "Presupuesto de N\u00F3mina (MXN/per\u00EDodo)", type: "number", value: form.budget || "", onChange: v => setForm(p => (Object.assign(Object.assign({}, p), { budget: v }))), placeholder: "Ej: 150000" }),
-                React.createElement(Input, { label: "Jefe de Departamento", type: "select", value: form.head_id || form.head || "", onChange: v => setForm(p => (Object.assign(Object.assign({}, p), { head_id: v, head: v }))), options: headOpts })),
+                React.createElement(Input, { label: "Jefe de Departamento", type: "select", value: form.head_id || form.head || "", onChange: v => setForm(p => (Object.assign(Object.assign({}, p), { head_id: v, head: v }))), options: headOpts }),
+                React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 4 } },
+                    React.createElement(Input, { label: "Centro de Costos", type: "text", value: form.cost_center || "", onChange: v => setForm(p => Object.assign({}, p, { cost_center: v })), placeholder: "Ej: CC-001, 5100, VENTAS-MX" }),
+                    React.createElement(Input, { label: "M\u00E1x. Empleados Activos", type: "number", value: form.max_employees || "", onChange: v => setForm(p => Object.assign({}, p, { max_employees: v })), placeholder: "0 = sin l\u00EDmite" }))),
             React.createElement("div", { style: { marginTop: 20, display: "flex", gap: 10, justifyContent: "flex-end" } },
                 React.createElement("button", { onClick: () => setModal(false), style: { display: "inline-flex", alignItems: "center", gap: 6, padding: "9px 18px", border: `1px solid ${DS.textDim}44`, background: "transparent", color: DS.textDim, fontFamily: DS.mono, fontSize: 12, fontWeight: 700, cursor: "pointer", borderRadius: 1 } },
                     React.createElement(X, { size: 13 }),
