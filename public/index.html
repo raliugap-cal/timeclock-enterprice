@@ -1285,46 +1285,42 @@ const LoginScreen = ({ db, onLoginAdmin, onLoginAdmin_server, onLoginEmployee, o
                 error && (React.createElement("div", { style: { marginBottom: 12, padding: "10px 14px", background: `${DS.glowRed}12`, border: `1px solid ${DS.glowRed}40`, borderRadius: 8, display: "flex", gap: 8, alignItems: "center" } },
                     React.createElement(AlertCircle, { size: 13, color: DS.glowRed }),
                     React.createElement("span", { style: { fontFamily: DS.sans, fontSize: 12, color: DS.glowRed, fontWeight: 500 } }, error))),
-                selEmp === null ? (React.createElement("div", null,
+                !selEmp && (React.createElement("div", null,
                     React.createElement("div", { style: { fontFamily: DS.sans, fontSize: 12, color: DS.textMid, marginBottom: 8, fontWeight: 500 } }, t("login_search_name")),
                     React.createElement("div", { style: { position: "relative", marginBottom: 12 } },
                         React.createElement(Search, { size: 13, color: DS.textDim, style: { position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)" } }),
                         React.createElement("input", { value: empSearch, onChange: e => setEmpSearch(e.target.value), placeholder: t("login_search_placeholder"), autoFocus: true, style: { width: "100%", padding: "10px 12px 10px 32px", background: DS.bg, border: `1px solid ${DS.border}`, borderRadius: 8, color: DS.text, fontFamily: DS.sans, fontSize: 13, outline: "none", boxSizing: "border-box" } })),
                     React.createElement("div", { style: { maxHeight: 240, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 } },
-                        activeEmps === null && dbEmps.length === 0 && (React.createElement("div", { style: { padding: 16, textAlign: "center", fontFamily: DS.mono, fontSize: 11, color: DS.textDim } }, "⏳ Cargando empleados...")),
-                        activeEmps !== null && empList.length === 0 && (React.createElement("div", { style: { padding: 16, textAlign: "center", fontFamily: DS.sans, fontSize: 13, color: DS.textDim } }, t("login_no_results"))),
+                        (activeEmps === null && dbEmps.length === 0) && (React.createElement("div", { style: { padding: 16, textAlign: "center", fontFamily: DS.mono, fontSize: 11, color: DS.textDim } }, "⏳ Cargando empleados...")),
+                        (activeEmps !== null && empList.length === 0) && (React.createElement("div", { style: { padding: 16, textAlign: "center", fontFamily: DS.sans, fontSize: 13, color: DS.textDim } }, t("login_no_results"))),
                         empList.map(emp => {
                             const dept = ((db === null || db === void 0 ? void 0 : db.departments) || []).find(d => d.id === emp.dept);
                             return (React.createElement("button", { key: emp.id, onClick: () => { setSelEmp(emp); setError(""); setPin(""); }, style: { display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", background: DS.surface, border: `1px solid ${DS.border}`, borderRadius: 9, cursor: "pointer", textAlign: "left" }, onMouseEnter: e => { e.currentTarget.style.borderColor = DS.glowGreen; e.currentTarget.style.background = DS.surfaceHi; }, onMouseLeave: e => { e.currentTarget.style.borderColor = DS.border; e.currentTarget.style.background = DS.surface; } },
                                 React.createElement(Avatar, { initials: emp.avatar || "??", color: (dept === null || dept === void 0 ? void 0 : dept.color) || DS.glowGreen, size: 36 }),
                                 React.createElement("div", null,
                                     React.createElement("div", { style: { fontFamily: DS.sans, fontSize: 13, fontWeight: 700, color: DS.text } }, emp.name),
-                                    React.createElement("div", { style: { fontFamily: DS.sans, fontSize: 11, color: DS.textDim, fontWeight: 500 } },
-                                        emp.role,
-                                        " · ",
-                                        (dept === null || dept === void 0 ? void 0 : dept.name) || "—")),
+                                    React.createElement("div", { style: { fontFamily: DS.sans, fontSize: 11, color: DS.textDim, fontWeight: 500 } }, emp.role || "—")),
                                 React.createElement(ChevronRight, { size: 14, color: DS.textDim, style: { marginLeft: "auto" } })));
-                        })))) : (
-                /* Step 2: PIN entry */
-                React.createElement("div", null,
+                        })))),
+                selEmp && (React.createElement("div", null,
                     React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", background: DS.surface, border: `1px solid ${DS.glowGreen}40`, borderRadius: 10, marginBottom: 20 } },
-                        React.createElement(Avatar, { initials: selEmp.avatar || selEmp.name?.slice(0,2) || "??", color: DS.glowGreen, size: 44 }),
+                        React.createElement(Avatar, { initials: (selEmp.avatar || selEmp.name || "?").slice(0,2), color: DS.glowGreen, size: 44 }),
                         React.createElement("div", { style: { flex: 1 } },
                             React.createElement("div", { style: { fontFamily: DS.sans, fontSize: 16, fontWeight: 700, color: DS.text } }, selEmp.name),
                             React.createElement("div", { style: { fontFamily: DS.sans, fontSize: 12, color: DS.textDim, fontWeight: 500 } }, selEmp.role || "Empleado")),
                         React.createElement("button", { onClick: () => { setSelEmp(null); setPin(""); setError(""); }, style: { background: "none", border: "none", color: DS.textDim, cursor: "pointer" } },
                             React.createElement(X, { size: 14 }))),
                     React.createElement("div", { style: { fontFamily: DS.sans, fontSize: 13, color: DS.textMid, textAlign: "center", marginBottom: 16, fontWeight: 500 } }, t("login_pin_instruction")),
-                    React.createElement("div", { style: { display: "flex", gap: 12, justifyContent: "center", marginBottom: 20 } }, [0, 1, 2, 3].map(i => (React.createElement("div", { key: i, style: { width: 16, height: 16, borderRadius: "50%", border: `2px solid ${pin.length > i ? DS.glowGreen : DS.border}`, background: pin.length > i ? DS.glowGreen : "transparent", transition: "all .15s" } })))),
-                    React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, maxWidth: 240, margin: "0 auto" } }, [1, 2, 3, 4, 5, 6, 7, 8, 9, "", 0, "⌫"].map((k, i) => (React.createElement("button", { key: i, onClick: () => { if (k === "⌫")
-                            handlePinDel();
-                        else if (k !== "")
-                            handlePinKey(String(k)); setError(""); }, style: { padding: "15px 0", background: k === "⌫" ? `${DS.glowRed}12` : DS.surface, border: `1px solid ${k === "⌫" ? DS.glowRed + "40" : DS.border}`, borderRadius: 9, color: k === "⌫" ? DS.glowRed : DS.text, fontFamily: DS.mono, fontSize: 18, fontWeight: 600, cursor: k === "" ? "default" : "pointer", opacity: k === "" ? 0 : 1 }, disabled: k === "" }, k)))),
-                    React.createElement("button", { onClick: handleEmpLogin, disabled: pin.length !== 4, style: { marginTop: 16, width: "100%", padding: "12px", background: pin.length === 4 ? `${DS.glowGreen}22` : "transparent", border: `1px solid ${pin.length === 4 ? DS.glowGreen + "55" : DS.border}`, borderRadius: 9, color: pin.length === 4 ? DS.glowGreen : DS.textDim, fontFamily: DS.sans, fontSize: 14, fontWeight: 700, cursor: pin.length === 4 ? "pointer" : "not-allowed", display: "flex", alignItems: "center", justifyContent: "center", gap: 8, transition: "all .2s" } },
-                        React.createElement(CheckCircle, { size: 15 }),
-                        t("login_confirm"))),
+                    React.createElement("div", { style: { display: "flex", gap: 12, justifyContent: "center", marginBottom: 20 } }, [0,1,2,3].map(i => React.createElement("div", { key: i, style: { width: 16, height: 16, borderRadius: "50%", border: `2px solid ${pin.length > i ? DS.glowGreen : DS.border}`, background: pin.length > i ? DS.glowGreen : "transparent", transition: "all .15s" } }))),
+                    React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, maxWidth: 240, margin: "0 auto 16px" } },
+                        [1,2,3,4,5,6,7,8,9,"",0,"⌫"].map((k,i) => React.createElement("button", { key: i,
+                            onClick: () => { if (k === "⌫") handlePinDel(); else if (k !== "") handlePinKey(String(k)); setError(""); },
+                            style: { padding: "15px 0", background: k === "⌫" ? `${DS.glowRed}12` : DS.surface, border: `1px solid ${k === "⌫" ? DS.glowRed+"40" : DS.border}`, borderRadius: 9, color: k === "⌫" ? DS.glowRed : DS.text, fontFamily: DS.mono, fontSize: 18, fontWeight: 600, cursor: k === "" ? "default" : "pointer", opacity: k === "" ? 0 : 1 }, disabled: k === "" }, k))),
+                    React.createElement("button", { onClick: handleEmpLogin, disabled: pin.length !== 4,
+                        style: { width: "100%", padding: "12px", background: pin.length === 4 ? `${DS.glowGreen}22` : "transparent", border: `1px solid ${pin.length === 4 ? DS.glowGreen+"55" : DS.border}`, borderRadius: 9, color: pin.length === 4 ? DS.glowGreen : DS.textDim, fontFamily: DS.sans, fontSize: 14, fontWeight: 700, cursor: pin.length === 4 ? "pointer" : "not-allowed", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 } },
+                        React.createElement(CheckCircle, { size: 15 }), t("login_confirm")))),
                 React.createElement("button", { onClick: () => { setMode(null); setError(""); setSelEmp(null); setPin(""); setEmpSearch(""); }, style: { marginTop: 12, width: "100%", padding: "8px", background: "transparent", border: "none", color: DS.textDim, fontFamily: DS.sans, fontSize: 12, cursor: "pointer" } }, t("login_back")))),
-        React.createElement("div", { style: { position: "fixed", bottom: 14, left: 0, right: 0, textAlign: "center", fontFamily: DS.sans, fontSize: 11, color: DS.textDim, fontWeight: 500, zIndex: 1 } }, t("footer"))))));
+        React.createElement("div", { style: { position: "fixed", bottom: 14, left: 0, right: 0, textAlign: "center", fontFamily: DS.sans, fontSize: 11, color: DS.textDim, fontWeight: 500, zIndex: 1 } }, t("footer")))));
 };
 // ═══════════════════════════════════════════════
 //  EMPLOYEE PORTAL — Vista del empleado al hacer login
