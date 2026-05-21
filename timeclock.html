@@ -4415,6 +4415,26 @@ const CutModal = ({ db, activeEmps, onProcess, onClose }) => {
             setTo(`${y}-${String(m + 1).padStart(2, "0")}-${lastDay}`);
         }
     };
+    const setCurrentWeek = () => {
+        const now = new Date();
+        const day = now.getDay(); // 0=Sun, 1=Mon...
+        const diffToMon = day === 0 ? -6 : 1 - day; // days to last Monday
+        const mon = new Date(now); mon.setDate(now.getDate() + diffToMon);
+        const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+        const fmt = d => d.toISOString().slice(0,10);
+        setFrom(fmt(mon)); setTo(fmt(sun));
+        setType("semanal");
+    };
+    const setPrevWeek = () => {
+        const now = new Date();
+        const day = now.getDay();
+        const diffToMon = day === 0 ? -6 : 1 - day;
+        const mon = new Date(now); mon.setDate(now.getDate() + diffToMon - 7);
+        const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+        const fmt = d => d.toISOString().slice(0,10);
+        setFrom(fmt(mon)); setTo(fmt(sun));
+        setType("semanal");
+    };
     const setPrevMonth = () => {
         const now = new Date();
         const y = now.getFullYear(), m = now.getMonth(); // 0-indexed current month
@@ -4471,10 +4491,12 @@ const CutModal = ({ db, activeEmps, onProcess, onClose }) => {
                         React.createElement("div", { style: { display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" } },
                             React.createElement("span", { style: { fontFamily: DS.mono, fontSize: 8, color: DS.textDim, letterSpacing: "0.08em" } }, "ACCESOS R\u00C1PIDOS:"),
                             [
-                                { label: "QUINCENA ACTUAL", fn: setCurrentPeriod },
-                                { label: "QUINCENA ANTERIOR", fn: setPrevQuincena },
-                                { label: "MES ANTERIOR", fn: setPrevMonth },
-                            ].map(({ label, fn }) => (React.createElement("button", { key: label, onClick: () => { fn(); setError(""); }, style: { padding: "4px 10px", background: "transparent", border: `1px solid ${DS.glowAmber}44`, color: DS.glowAmber, fontFamily: DS.mono, fontSize: 9, fontWeight: 700, cursor: "pointer" } }, label)))))),
+                                { label: "SEMANA ACTUAL",   fn: setCurrentWeek,   color: DS.glowGreen },
+                                { label: "SEMANA ANTERIOR", fn: setPrevWeek,       color: DS.glowGreen },
+                                { label: "QUINCENA ACTUAL", fn: setCurrentPeriod,  color: DS.glowAmber },
+                                { label: "QUINCENA ANTERIOR", fn: setPrevQuincena, color: DS.glowAmber },
+                                { label: "MES ANTERIOR",    fn: setPrevMonth,      color: DS.glowAmber },
+                            ].map(({ label, fn, color }) => (React.createElement("button", { key: label, onClick: () => { fn(); setError(""); }, style: { padding: "4px 10px", background: "transparent", border: `1px solid ${color}44`, color, fontFamily: DS.mono, fontSize: 9, fontWeight: 700, cursor: "pointer" } }, label)))))),
                 React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 } },
                     React.createElement(Input, { label: "Pa\u00EDs / R\u00E9gimen", type: "select", value: country, onChange: v => {
                             setCountry(v);
