@@ -98,7 +98,7 @@ app.post('/api/auth/pin', async (req, res) => {
     }
     const { id, data } = r.rows[0];
     const employee = { id, ...data };
-    const token = makeToken({ id, name: data.name, type: 'employee', isEmployee: true }, 12);
+    const token = jwt.sign({ id, name: data.name, type: 'employee', isEmployee: true }, JWT_SECRET, { expiresIn: '12h' });
     res.cookie(COOKIE_NAME, token, { ...COOKIE_OPTS, maxAge: 12 * 3600000 });
     console.log('[pin] Login OK:', data.name, id);
     res.json({ ok: true, employee });
