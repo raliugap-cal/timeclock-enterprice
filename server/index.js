@@ -65,42 +65,48 @@ function requireAuth(req, res, next) {
 }
 
 // ── AUTH: ADMIN LOGIN ─────────────────────────────────────────────────
-app.post('/api/auth/login', async (req, res) => {
-  const { username, password } = req.body || {};
-  if (!username || !password) return res.status(400).json({ error: 'Missing fields' });
-  console.log('[login] attempt:', username);
+app.post('/api/auth/pin', async (req, res) => {
+  const { pin, empId } = req.body || {};
+  if (!pin) return res.status(400).json({ error: 'Missing PIN' });
+  const pinStr = String(pin).trim();
+  console.log('[pin] attempt - empId:', empId, 'pin:', pinStr);
   try {
-    const r = await pool.query(
-      "SELECT id, data FROM system_users WHERE username = $1",
-      [username.toLowerCase().trim()]
-    );
-    if (!r.rows.length) {
-      console.log('[login] user not found:', username);
-      return res.status(401).json({ error: 'Invalid credentials' });
+    let r;
+    if (empId) {
+      // Verify PIN against the specific employee selected
+      r = await pool.query(
+        "SELECT id, data FROM employees WHERE id = $1 AND data->>'status' = 'active'",
+        [empId]
+      );
+      if (!r.rows.length) {
+        console.log('[pin] empId not found:', empId);
+        return res.status(401).json({ error: 'Empleado no encontrado' });
+      }
+      // Verify PIN matches
+      const storedPin = r.rows[0].data.pin;
+      console.log('[pin] stored pin:', storedPin, 'provided pin:', pinStr);
+      if (storedPin !== pinStr) {
+        console.log('[pin] PIN mismatch for:', r.rows[0].data.name);
+        return res.status(401).json({ error: 'PIN incorrecto' });
+      }
+    } else {
+      r = await pool.query(
+        "SELECT id, data FROM employees WHERE data->>'pin' = $1 AND data->>'status' = 'active' LIMIT 1",
+        [pinStr]
+      );
+      if (!r.rows.length) return res.status(401).json({ error: 'PIN incorrecto' });
     }
     const { id, data } = r.rows[0];
-    console.log('[login] found user:', data.username, 'status:', data.status, 'hasHash:', !!data.passwordHash);
-    if (data.status === 'inactive') return res.status(401).json({ error: 'Account inactive' });
-    // Try plain text first, then bcrypt hash
-    let valid = false;
-    if (data.password && data.password === password) {
-      valid = true;
-      console.log('[login] plain text match');
-    } else if (data.passwordHash) {
-      valid = await bcrypt.compare(password, data.passwordHash);
-      console.log('[login] bcrypt result:', valid);
-    }
-    if (!valid) {
-      console.log('[login] invalid password for:', username);
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
-    const user = { id, username: data.username, name: data.name, role: data.role, type: 'admin' };
-    res.cookie(COOKIE_NAME, sign(user), COOKIE_OPTS);
-    console.log('[login] success:', data.name);
-    res.json({ ok: true, user });
-  } catch (e) { console.error('[login]', e.message); res.status(500).json({ error: 'Server error' }); }
+    const employee = { id, ...data };
+    const token = makeToken({ id, name: data.name, type: 'employee', isEmployee: true }, 12);
+    res.cookie(COOKIE_NAME, token, { ...COOKIE_OPTS, maxAge: 12 * 3600000 });
+    console.log('[pin] Login OK:', data.name, id);
+    res.json({ ok: true, employee });
+  } catch (e) { 
+    console.error('[pin]', e.message); 
+    res.status(500).json({ error: 'Server error' }); 
+  }
 });
-
 // ── AUTH: EMPLOYEE PIN LOGIN ──────────────────────────────────────────
 app.post('/api/auth/pin', async (req, res) => {
   const { pin } = req.body || {};
