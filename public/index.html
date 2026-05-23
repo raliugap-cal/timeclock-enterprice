@@ -7217,29 +7217,30 @@ const ViewCalculadora = ({ db }) => {
     const fetchFxWithAI = async () => {
         setFxLoading(true); setFxMsg(""); setFxError("");
         try {
-            const res = await fetch("https://api.anthropic.com/v1/messages", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    model: "claude-sonnet-4-20250514",
-                    max_tokens: 300,
-                    tools: [{ type: "web_search_20250305", name: "web_search" }],
-                    messages: [{ role: "user", content: "Busca el tipo de cambio actual del USD a MXN y del USD a DOP (peso dominicano). Responde SOLO con JSON así: {\"MXN\":17.50,\"DOP\":58.50,\"source\":\"Fuente: ...\",\"date\":\"2025-01-01\"}" }],
-                })
-            });
+            // Usar API gratuita de tipos de cambio (sin key requerida)
+            const res = await fetch("https://api.frankfurter.app/latest?from=USD&to=MXN,DOP");
+            if (!res.ok) throw new Error("HTTP " + res.status);
             const data = await res.json();
-            const text = (data.content || []).filter(b => b.type === "text").map(b => b.text).join("");
-            const match = text.match(/\{[\s\S]*?\}/);
-            if (match) {
-                const parsed = JSON.parse(match[0]);
-                if (parsed.MXN) setFxMXN(String(parsed.MXN));
-                if (parsed.DOP) setFxDOP(String(parsed.DOP));
-                setFxMsg(parsed.source ? `${parsed.source} · ${parsed.date || "hoy"}` : t("calc_fx_updated"));
+            if (data.rates) {
+                if (data.rates.MXN) setFxMXN(String(Number(data.rates.MXN).toFixed(2)));
+                if (data.rates.DOP) setFxDOP(String(Number(data.rates.DOP).toFixed(2)));
+                setFxMsg(`Frankfurter (BCE) · ${data.date || "hoy"}`);
             } else {
-                setFxError("No se pudo parsear la respuesta. Verifica manualmente.");
+                throw new Error("No rates");
             }
         } catch(e) {
-            setFxError("Error de red al consultar IA.");
+            // Fallback: Open Exchange Rates (otra API pública)
+            try {
+                const res2 = await fetch("https://open.er-api.com/v6/latest/USD");
+                const data2 = await res2.json();
+                if (data2.rates) {
+                    if (data2.rates.MXN) setFxMXN(String(Number(data2.rates.MXN).toFixed(2)));
+                    if (data2.rates.DOP) setFxDOP(String(Number(data2.rates.DOP).toFixed(2)));
+                    setFxMsg(`Exchange Rate API · ${data2.time_last_update_utc?.slice(0,16) || "hoy"}`);
+                } else throw new Error("No rates");
+            } catch(e2) {
+                setFxError("No se pudo obtener el tipo de cambio. Verifícalo manualmente en: xe.com");
+            }
         }
         setFxLoading(false);
     };
