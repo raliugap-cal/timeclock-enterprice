@@ -60,7 +60,8 @@ function requireAuth(req, res, next) {
 
 // ── ADMIN LOGIN ──────────────────────────────────────────────────────
 //app.post('/api/auth/login', async (req, res) => {
-app.post('/api/auth/login', async (req, res) => { console.log('LOGIN ENDPOINT HIT v2'); => {
+app.post('/api/auth/login', async (req, res) => {
+  console.log('LOGIN ENDPOINT HIT v2');
 const { username, password } = req.body || {};
   if (!username || !password) return res.status(400).json({ error: 'Missing fields' });
   console.log('[login] attempt:', username);
