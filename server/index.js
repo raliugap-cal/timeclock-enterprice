@@ -221,6 +221,7 @@ app.put('/api/company', requireAuth, async (req, res) => {
   await pool.query("INSERT INTO company_cfg(id,data) VALUES('main',$1) ON CONFLICT(id) DO UPDATE SET data=$1,updated_at=NOW()", [JSON.stringify(req.body)]);
   res.json({ ok: true });
 });
+app.get('/api/version', (req, res) => res.json({ version: 'v3-with-login', routes: ['login','pin','me','db'] }));
 app.get('/api/health', async (req, res) => {
   try { await pool.query('SELECT 1'); res.json({ ok: true, ts: new Date().toISOString() }); }
   catch { res.status(503).json({ ok: false }); }
