@@ -1832,7 +1832,8 @@ const ViewDashboard = ({ db }) => {
     if (!db)
         return null;
     const activeEmps = db.employees.filter(e => e.status === "active");
-    const todayRecs = db.timeRecords.filter(r => r.date === "2025-02-24");
+    const todayDash = new Date().toISOString().slice(0, 10);
+    const todayRecs = ((db && db.timeRecords) || []).filter(r => r.date === todayDash);
     const openRecs = todayRecs.filter(r => !r.exit);
     const lateRecs = todayRecs.filter(r => r.status === "tardanza");
     const pendingCuts = db.payrollCuts.filter(p => p.status === "pendiente");
