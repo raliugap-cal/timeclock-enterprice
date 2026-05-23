@@ -7328,10 +7328,19 @@ const ViewCalculadora = ({ db }) => {
     const workedDays = (hourlyRate && workedDaysInput && Number(workedDaysInput) > 0)
         ? Number(workedDaysInput)
         : undefined;
-    const emp = { country, payroll, salary, hourlyRate, federalWithheld, ftbWithheld, dayMap: appliedDayMap || null };
+    const emp = {
+        country, payroll, salary, hourlyRate, federalWithheld, ftbWithheld,
+        dayMap: appliedDayMap || null,
+        calcMode: (hourlyRate && country === "US") ? "hourly" : "salary"
+    };
+    // Para MX/RD/SV: si días trabajados < días del período, calcular salario proporcional
+    const proportionalSalary = (country !== "US" && workedDaysInput && Number(workedDaysInput) > 0 && Number(workedDaysInput) < days)
+        ? r2(salary * Number(workedDaysInput) / days)
+        : salary;
+    const empForCalc = { ...emp, salary: proportionalSalary };
     // ── Resultado principal ──────────────────────────────────────
-    const calcRaw = salary > 0
-        ? calcPayroll(emp, days, appliedDayMap ? undefined : workedDays, appliedDayMap ? undefined : (appliedTotalHours != null ? appliedTotalHours : undefined))
+    const calcRaw = proportionalSalary > 0
+        ? calcPayroll(empForCalc, days, appliedDayMap ? undefined : workedDays, appliedDayMap ? undefined : (appliedTotalHours != null ? appliedTotalHours : undefined))
         : null;
     const calc = applyConceptos(calcRaw, country);
     // ── Comparador: 4 países — normalizado a USD ────────────────
@@ -7492,7 +7501,9 @@ const ViewCalculadora = ({ db }) => {
                             React.createElement("div", { style: { fontFamily: DS.mono, fontSize: 9, color: DS.textDim, letterSpacing: "0.12em", marginBottom: 12 } }, "PAR\u00C1METROS SALARIALES"),
                             React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 10 } },
                                 React.createElement(Input, { label: country === "MX" ? "Salario por Período (MXN)" : country === "RD" ? "Salario por Período (DOP)" : "Salary per Period (USD)", type: "number", value: salaryInput, onChange: v => setSalaryInput(v), placeholder: country === "MX" ? "25000" : country === "US" ? "9615" : "1200" }),
-                                country === "US" && (React.createElement(Input, { label: "Hourly Rate ($/hr) \u2014 si aplica", type: "number", value: hrInput, onChange: v => setHrInput(v), placeholder: "68.00" })),
+
+                                // ── USA: pago por HORA ──────────────────────────────
+                                country === "US" && (React.createElement(Input, { label: "Hourly Rate ($/hr) — si aplica", type: "number", value: hrInput, onChange: v => setHrInput(v), placeholder: "68.00" })),
                                 country === "US" && hourlyRate > 0 && (() => {
                                     const calD = Number(periodDays) || 14;
                                     const wks = r2(calD / 7);
@@ -7501,28 +7512,46 @@ const ViewCalculadora = ({ db }) => {
                                     return (React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 6 } },
                                         appliedDayMap ? (React.createElement("div", { style: { padding: "10px 12px", background: `${DS.glowGreen}08`, border: `1px solid ${DS.glowGreen}33` } },
                                             React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 } },
-                                                React.createElement("span", { style: { fontFamily: DS.mono, fontSize: 9, fontWeight: 700, color: DS.glowGreen } }, "\u2713 JORNADA DESDE CALENDARIO"),
-                                                React.createElement("button", { onClick: () => { setAppliedDayMap(null); setAppliedTotalHours(null); }, style: { background: "none", border: "none", color: DS.textDim, cursor: "pointer", fontSize: 10 } }, "\u2715")),
+                                                React.createElement("span", { style: { fontFamily: DS.mono, fontSize: 9, fontWeight: 700, color: DS.glowGreen } }, "✓ JORNADA DESDE CALENDARIO"),
+                                                React.createElement("button", { onClick: () => { setAppliedDayMap(null); setAppliedTotalHours(null); }, style: { background: "none", border: "none", color: DS.textDim, cursor: "pointer", fontSize: 10 } }, "✕")),
                                             React.createElement("div", { style: { display: "flex", gap: 12 } }, [
                                                 { l: "DÍAS", v: Object.values(appliedDayMap).filter(h => h > 0).length },
                                                 { l: "HORAS", v: `${appliedTotalHours}h` },
                                                 { l: "OT", v: `${Math.max(0, r2(appliedTotalHours - maxH))}h`, c: Math.max(0, r2(appliedTotalHours - maxH)) > 0 ? DS.glowRed : DS.textDim },
                                             ].map(k => (React.createElement("div", { key: k.l },
                                                 React.createElement("div", { style: { fontFamily: DS.mono, fontSize: 7, color: DS.textDim } }, k.l),
-                                                React.createElement("div", { style: { fontFamily: DS.mono, fontSize: 13, fontWeight: 900, color: k.c || DS.glowGreen } }, k.v))))))) : (React.createElement(Input, { label: `Días laborados manual (máx ${maxWD} — ${maxH}h reg)`, type: "number", value: workedDaysInput, onChange: v => setWorkedDaysInput(v), placeholder: String(maxWD) })),
-                                        React.createElement("button", { onClick: () => setShowCalendario(true), style: {
-                                                display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
-                                                padding: "9px 14px", border: `1px solid ${DS.glow}55`,
-                                                background: `${DS.glow}10`, color: DS.glow,
-                                                fontFamily: DS.mono, fontSize: 10, fontWeight: 700, cursor: "pointer",
-                                                letterSpacing: "0.08em",
-                                            } },
+                                                React.createElement("div", { style: { fontFamily: DS.mono, fontSize: 13, fontWeight: 900, color: k.c || DS.glowGreen } }, k.v))))))) : (React.createElement(Input, { label: `Horas trabajadas (máx ${maxH}h reg · OT después de ${maxH}h)`, type: "number", value: appliedTotalHours != null ? String(appliedTotalHours) : "", onChange: v => setAppliedTotalHours(v !== "" ? Number(v) : null), placeholder: String(maxH) })),
+                                        React.createElement("button", { onClick: () => setShowCalendario(true), style: { display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "9px 14px", border: `1px solid ${DS.glow}55`, background: `${DS.glow}10`, color: DS.glow, fontFamily: DS.mono, fontSize: 10, fontWeight: 700, cursor: "pointer", letterSpacing: "0.08em" } },
                                             React.createElement(Calendar, { size: 13 }),
                                             appliedDayMap ? "EDITAR CALENDARIO DE JORNADA" : "ABRIR CALENDARIO DE JORNADA"),
                                         React.createElement("div", { style: { display: "flex", gap: 6, alignItems: "center", padding: "5px 8px", background: `${DS.glowAmber}08`, border: `1px solid ${DS.glowAmber}22` } },
                                             React.createElement(Clock, { size: 10, color: DS.glowAmber }),
-                                            React.createElement("span", { style: { fontFamily: DS.mono, fontSize: 8, color: DS.glowAmber } }, "2 d\u00EDas descanso/semana \u00B7 m\u00E1x 40h/sem \u00B7 overtime 1.5\u00D7 (FLSA)"))));
+                                            React.createElement("span", { style: { fontFamily: DS.mono, fontSize: 8, color: DS.glowAmber } }, "2 días descanso/semana · máx 40h/sem · overtime 1.5× (FLSA)"))));
                                 })(),
+
+                                // ── MX / RD / SV: pago por DÍA ─────────────────────
+                                country !== "US" && React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: 8 } },
+                                    React.createElement("div", { style: { padding: "10px 14px", background: `${DS.glow}06`, border: `1px solid ${DS.glow}22`, borderRadius: 6 } },
+                                        React.createElement("div", { style: { fontFamily: DS.mono, fontSize: 8, color: DS.textDim, marginBottom: 8, letterSpacing: "0.1em" } }, "SIMULACIÓN DE DÍAS TRABAJADOS"),
+                                        React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 } },
+                                            React.createElement(Input, {
+                                                label: "Días del período (total)",
+                                                type: "number",
+                                                value: periodDays,
+                                                onChange: v => setPeriodDays(v),
+                                                placeholder: payroll === "semanal" ? "7" : payroll === "mensual" ? "30" : "15"
+                                            }),
+                                            React.createElement(Input, {
+                                                label: "Días trabajados (dejar vacío = período completo)",
+                                                type: "number",
+                                                value: workedDaysInput,
+                                                onChange: v => setWorkedDaysInput(v),
+                                                placeholder: periodDays || "15"
+                                            })),
+                                        workedDaysInput && Number(workedDaysInput) > 0 && Number(workedDaysInput) < Number(periodDays) && React.createElement("div", { style: { marginTop: 8, padding: "6px 10px", background: `${DS.glowAmber}08`, border: `1px solid ${DS.glowAmber}33`, fontFamily: DS.mono, fontSize: 9, color: DS.glowAmber } },
+                                            "⚠ Pago proporcional: " + workedDaysInput + "/" + periodDays + " días · Salario = $" +
+                                            r2(Number(salaryInput) * Number(workedDaysInput) / Number(periodDays)).toLocaleString() +
+                                            (country === "MX" ? " MXN" : country === "RD" ? " DOP" : " USD")))),
                                 React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 } },
                                     React.createElement("div", null,
                                         React.createElement("div", { style: { fontFamily: DS.mono, fontSize: 9, color: DS.textDim, marginBottom: 6, letterSpacing: "0.08em" } }, "TIPO DE N\u00D3MINA"),
