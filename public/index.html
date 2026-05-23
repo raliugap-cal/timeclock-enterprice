@@ -278,32 +278,27 @@ const getPaisesActivos = (db) => {
     return active;
 };
 const PAIS_LABELS = { MX:"🇲🇽 México (SAT)", US:"🇺🇸 USA (IRS)", RD:"🇩🇴 Rep. Dominicana", SV:"🇸🇻 El Salvador" };
-// ─── MX tables ───────────────────────────────────────────
+// ─── MX tables — Anexo 8 RMF 2026, DOF 28/12/2025, vigencia 01/01/2026 ───────
+// Factor de actualización 1.13213 aplicado a los límites (inflación acumulada >10%)
+// Los porcentajes se mantienen sin cambio respecto a 2025
 const SAT_ISR = [
-    { li: 0, ls: 746.04, ff: 0, pct: 1.92 },
-    { li: 746.05, ls: 6332.05, ff: 14.32, pct: 6.40 },
-    { li: 6332.06, ls: 11128.01, ff: 371.83, pct: 10.88 },
-    { li: 11128.02, ls: 12935.82, ff: 893.63, pct: 16.00 },
-    { li: 12935.83, ls: 15487.71, ff: 1182.88, pct: 17.92 },
-    { li: 15487.72, ls: 31236.49, ff: 1640.18, pct: 21.36 },
-    { li: 31236.50, ls: 49233.00, ff: 5004.12, pct: 23.52 },
-    { li: 49233.01, ls: 93993.90, ff: 9236.89, pct: 30.00 },
-    { li: 93993.91, ls: 125325.20, ff: 22665.17, pct: 32.00 },
-    { li: 125325.21, ls: 375975.61, ff: 32691.18, pct: 34.00 },
-    { li: 375975.62, ls: Infinity, ff: 117912.32, pct: 35.00 },
+    { li: 0.01,      ls: 746.04,     ff: 0.00,       pct: 1.92  },
+    { li: 746.05,    ls: 6332.05,    ff: 14.32,      pct: 6.40  },
+    { li: 6332.06,   ls: 11128.01,   ff: 371.83,     pct: 10.88 },
+    { li: 11128.02,  ls: 12935.82,   ff: 893.63,     pct: 16.00 },
+    { li: 12935.83,  ls: 15487.71,   ff: 1182.88,    pct: 17.92 },
+    { li: 15487.72,  ls: 31236.49,   ff: 1639.32,    pct: 21.36 },
+    { li: 31236.50,  ls: 49233.00,   ff: 4005.46,    pct: 23.52 },
+    { li: 49233.01,  ls: 93993.90,   ff: 8237.45,    pct: 30.00 },
+    { li: 93993.91,  ls: 125325.20,  ff: 21665.72,   pct: 32.00 },
+    { li: 125325.21, ls: 375975.61,  ff: 31691.85,   pct: 34.00 },
+    { li: 375975.62, ls: Infinity,   ff: 116912.87,  pct: 35.00 },
 ];
+// Subsidio al Empleo 2026 — DOF 01/05/2024 (simplificado, vigente para 2026)
+// Monto fijo $406.83 para ingresos hasta $9,081.00
 const SAT_SUBSIDIO = [
-    { li: 0, ls: 1768.96, s: 407.02 },
-    { li: 1768.97, ls: 2653.38, s: 406.83 },
-    { li: 2653.39, ls: 3472.84, s: 406.62 },
-    { li: 3472.85, ls: 3537.87, s: 392.77 },
-    { li: 3537.88, ls: 4446.15, s: 382.46 },
-    { li: 4446.16, ls: 4717.18, s: 354.23 },
-    { li: 4717.19, ls: 5335.42, s: 324.87 },
-    { li: 5335.43, ls: 6224.67, s: 294.63 },
-    { li: 6224.68, ls: 7113.90, s: 253.54 },
-    { li: 7113.91, ls: 7382.33, s: 217.61 },
-    { li: 7382.34, ls: Infinity, s: 0 },
+    { li: 0.01,    ls: 9081.00, s: 406.83 },
+    { li: 9081.01, ls: Infinity, s: 0 },
 ];
 // ─── US tables — IRS Pub.15-T 2026 + IRS Rev.Proc.2025-32 ───
 // Federal brackets: taxable income (single) — OBBBA permanente
