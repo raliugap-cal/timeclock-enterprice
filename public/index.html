@@ -959,7 +959,7 @@ const SEED = {
     ],
     payrollCuts: [
         { id: "p1", period: "1-15 Feb 2025", type: "quincenal", country: "MX", employees: 5, grossTotal: 97000, totalDed: 14200, netTotal: 82800, status: "pagado", date: "2025-02-15", createdBy: "admin" },
-        { id: "p2", period: "Sem 7 Feb 2025", type: "semanal", country: "MX", employees: 1, grossTotal: 12000, totalDed: 2100, netTotal: 9900, status: "pendiente", date: "2025-02-21", createdBy: "admin" },
+        // SEED payrollCuts removed — loaded from DB
         { id: "p3", period: "Ene 2025", type: "mensual", country: "all", employees: 3, grossTotal: 45000, totalDed: 8900, netTotal: 36100, status: "pagado", date: "2025-01-31", createdBy: "admin" },
     ],
     // ── Sistema de usuarios administradores (gestionados desde el módulo de permisos)
@@ -6366,7 +6366,7 @@ const ViewDepartments = ({ db, upsertDepartment, deleteDepartment }) => {
 // ═══════════════════════════════════════════════════════════════════════
 //  REPORTES DE NÓMINA — RRHH · SAT · IMSS · GERENCIAL
 // ═══════════════════════════════════════════════════════════════════════
-const ViewReportesNomina = ({ db, updatePayrollCut }) => {
+const ViewReportesNomina = ({ db, updatePayrollCut, reloadFromAPI }) => {
     const { t } = useT();
     const [tab, setTab] = useState("gerencial");
     const [selCut, setSelCut] = useState(null);
@@ -6374,6 +6374,11 @@ const ViewReportesNomina = ({ db, updatePayrollCut }) => {
     const [filterCountry, setFilterCountry] = useState("all");
     const [searchEmp, setSearchEmp] = useState("");
     const [authNotes, setAuthNotes] = useState("");
+
+    // Forzar reload al entrar al módulo para obtener datos frescos del servidor
+    React.useEffect(() => {
+        if (reloadFromAPI && window.TC_API?.IS_SERVER) reloadFromAPI();
+    }, []);
 
     if (!db) return React.createElement("div", { style: { padding: 40, textAlign: "center", color: DS.textDim, fontFamily: DS.sans } }, "Cargando...");
 
@@ -12470,7 +12475,7 @@ function App() {
                 view === "payroll" && React.createElement(ViewPayroll, { db: db, savePayrollCut: savePayrollCut, updatePayrollCut: updatePayrollCut, updateTaxYtd: updateTaxYtd }),
                 view === "calculadora" && React.createElement(ViewCalculadora, { db: db }),
                 view === "dispersion" && React.createElement(ViewDispersion, { db: db, upsertEmployee: upsertEmployee, updatePayrollCut: updatePayrollCut }),
-                view === "reportes" && React.createElement(ViewReportesNomina, { db: db, updatePayrollCut: updatePayrollCut }),
+                view === "reportes" && React.createElement(ViewReportesNomina, { db: db, updatePayrollCut: updatePayrollCut, reloadFromAPI: reloadFromAPI }),
                 view === "reports" && React.createElement(ViewBI, { db: db }),
                 view === "permisos" && React.createElement(ViewPermisos, { db: db, upsertSystemUser: upsertSystemUser, deleteSystemUser: deleteSystemUser, updateAccessRule: updateAccessRule, updateUserOverrides: updateUserOverrides, updateCompany: updateCompany }))),
             // ── GLOBAL OFFER TOAST (visible desde cualquier módulo) ──
