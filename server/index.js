@@ -26,7 +26,7 @@ const COOKIE_OPTS = {
 const app = express();
 app.use(compression());
 app.use(cookieParser());
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '50mb' }));  // Large limit for empSnapshot with 500 employees
 app.use(express.static(path.join(__dirname, '../public')));
 
 async function initDB() {
@@ -59,10 +59,8 @@ function requireAuth(req, res, next) {
 }
 
 // ── ADMIN LOGIN ──────────────────────────────────────────────────────
-//app.post('/api/auth/login', async (req, res) => {
 app.post('/api/auth/login', async (req, res) => {
-  console.log('LOGIN ENDPOINT HIT v2');
-const { username, password } = req.body || {};
+  const { username, password } = req.body || {};
   if (!username || !password) return res.status(400).json({ error: 'Missing fields' });
   console.log('[login] attempt:', username);
   try {
@@ -198,10 +196,16 @@ app.delete('/api/time-records/:id', requireAuth, async (req, res) => {
   await pool.query('DELETE FROM time_records WHERE id=$1', [req.params.id]); res.json({ ok: true });
 });
 app.put('/api/payroll-cuts/:id', requireAuth, async (req, res) => {
-  const { id } = req.params; const data = { ...req.body }; delete data.id;
-  await pool.query('INSERT INTO payroll_cuts(id,status,data) VALUES($1,$2,$3) ON CONFLICT(id) DO UPDATE SET data=$3,status=$2,updated_at=NOW()',
-    [id, data.status || 'pendiente', JSON.stringify(data)]);
-  res.json({ id, ...data });
+  const { id } = req.params;
+  const data = { ...req.body }; delete data.id;
+  const snapLen = data.empSnapshot?.length || 0;
+  console.log('[payroll-cut] saving:', id, 'snap:', snapLen, 'employees', 'status:', data.status);
+  try {
+    await pool.query('INSERT INTO payroll_cuts(id,status,data) VALUES($1,$2,$3) ON CONFLICT(id) DO UPDATE SET data=$3,status=$2,updated_at=NOW()',
+      [id, data.status || 'pendiente', JSON.stringify(data)]);
+    console.log('[payroll-cut] saved OK:', id);
+    res.json({ id, ...data });
+  } catch(e) { console.error('[payroll-cut] ERROR:', e.message); res.status(500).json({ error: e.message }); }
 });
 app.put('/api/system-users/:id', requireAuth, async (req, res) => {
   const { id } = req.params; const data = { ...req.body }; delete data.id;
@@ -222,7 +226,6 @@ app.put('/api/company', requireAuth, async (req, res) => {
   await pool.query("INSERT INTO company_cfg(id,data) VALUES('main',$1) ON CONFLICT(id) DO UPDATE SET data=$1,updated_at=NOW()", [JSON.stringify(req.body)]);
   res.json({ ok: true });
 });
-app.get('/api/version', (req, res) => res.json({ version: 'v3-with-login', routes: ['login','pin','me','db'] }));
 app.get('/api/health', async (req, res) => {
   try { await pool.query('SELECT 1'); res.json({ ok: true, ts: new Date().toISOString() }); }
   catch { res.status(503).json({ ok: false }); }
