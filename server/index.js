@@ -276,13 +276,19 @@ app.post('/api/fiscal-periods/:id/close', requireAuth, async (req, res) => {
     const period = p.rows[0];
     if (period.status === 'cerrado') return res.status(400).json({ error: 'Period already closed' });
 
-    // Get all authorized/dispersed payroll cuts within the period date range
+    // Get ALL payroll cuts within the period date range (any status except already frozen)
     const cuts = await pool.query(
-      `SELECT id, data FROM payroll_cuts 
-       WHERE (data->>'date' >= $1 AND data->>'date' <= $2)
-       AND status IN ('autorizado','dispersado')`,
+      `SELECT id, data, status FROM payroll_cuts 
+       WHERE status != 'congelado'
+       AND (
+         (data->>'date' >= $1 AND data->>'date' <= $2)
+         OR (data->>'dateFrom' >= $1 AND data->>'dateFrom' <= $2)
+         OR (data->>'from' >= $1 AND data->>'from' <= $2)
+       )`,
       [period.date_start, period.date_end]
     );
+    console.log('[fiscal-period/close] cuts found in range:', cuts.rows.length, 
+      cuts.rows.map(c => c.id + ':' + c.status).join(', '));
 
     // Compute accumulated totals per employee
     const empAccum = {};
