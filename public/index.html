@@ -2583,6 +2583,9 @@ const ViewEmployees = ({ db, upsertEmployee, deleteEmployee, upsertSystemUser })
                         React.createElement(Input, { label: t("emp_dept"), type: "select", value: form.dept || "d1", onChange: v => setForm(p => (Object.assign(Object.assign({}, p), { dept: v }))), options: deptOpts })),
                     React.createElement("div", { style: dim(allLocked) },
                         React.createElement(Input, { label: t("emp_role_label"), value: form.role || "", onChange: v => setForm(p => (Object.assign(Object.assign({}, p), { role: v }))), placeholder: "Ej: Analista Senior", required: true })),
+                    React.createElement("div", { style: dim(allLocked) },
+                        React.createElement(Input, { label: "Reporta a (jefe directo)", type: "select", value: form.reports_to || "", onChange: v => setForm(p => (Object.assign(Object.assign({}, p), { reports_to: v }))),
+                            options: [{ v: "", l: "— Sin jefe asignado (nodo raíz)" }, ...((db?.employees||[]).filter(e => e.status === "active" && e.id !== form.id).map(e => ({ v: e.id, l: e.name + " · " + (e.role||"") })))] })),
                     React.createElement("div", { style: dim(fiscalLocked) },
                         React.createElement(Input, { label: fiscalLocked ? t("emp_base_salary") : t("emp_base_salary"), type: "number", value: form.salary || "", onChange: v => setForm(p => (Object.assign(Object.assign({}, p), { salary: v }))), placeholder: "Ej: 15000", required: true })),
                     React.createElement("div", { style: Object.assign(Object.assign({}, dim(fiscalLocked)), { gridColumn: "1/-1" }) },
@@ -12056,6 +12059,219 @@ const ViewJobs = ({ db }) => {
     );
 };
 
+
+// ══════════════════════════════════════════════════════════════════════
+//  ORGANIGRAMA — Vista jerárquica de la empresa
+// ══════════════════════════════════════════════════════════════════════
+const ViewOrganigrama = ({ db }) => {
+    const [selEmp, setSelEmp] = React.useState(null);
+    const [zoom, setZoom] = React.useState(1);
+    const [filterDept, setFilterDept] = React.useState('all');
+
+    const emps  = ((db&&db.employees)||[]).filter(e=>e.status==='active');
+    const depts = (db&&db.departments)||[];
+
+    // Build hierarchy tree
+    const buildTree = (employees) => {
+        const map = {};
+        employees.forEach(e => { map[e.id] = { ...e, children: [] }; });
+        const roots = [];
+        employees.forEach(e => {
+            if (e.reports_to && map[e.reports_to]) {
+                map[e.reports_to].children.push(map[e.id]);
+            } else {
+                roots.push(map[e.id]);
+            }
+        });
+        return roots;
+    };
+
+    const filtered = filterDept === 'all' ? emps : emps.filter(e=>e.dept===filterDept);
+    const tree = buildTree(filtered);
+
+    // Color by dept
+    const getDeptColor = (emp) => {
+        const dept = depts.find(d=>d.id===emp.dept);
+        return dept ? dept.color : '#74c0fc';
+    };
+
+    // Country flag
+    const flag = c => ({MX:'🇲🇽',US:'🇺🇸',RD:'🇩🇴',SV:'🇸🇻'}[c]||'🌎');
+
+    // Avatar initials
+    const initials = name => (name||'?').split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase();
+
+    // Recursive node renderer
+    const OrgNode = ({ node, depth = 0, isLast = false }) => {
+        const [expanded, setExpanded] = React.useState(true);
+        const color = getDeptColor(node);
+        const isRoot = depth === 0;
+        const hasChildren = node.children && node.children.length > 0;
+
+        return React.createElement('div', { style:{ display:'flex', flexDirection:'column', alignItems:'center' } },
+            // Node card
+            React.createElement('div', { style:{ position:'relative', display:'inline-block' } },
+                // Connector line from parent
+                depth > 0 && React.createElement('div', { style:{
+                    position:'absolute', top:-24, left:'50%', transform:'translateX(-50%)',
+                    width:2, height:24, background:`linear-gradient(to bottom, ${color}00, ${color}88)`
+                }}),
+                React.createElement('div', {
+                    onClick: () => setSelEmp(selEmp&&selEmp.id===node.id ? null : node),
+                    style:{
+                        cursor:'pointer',
+                        background: selEmp&&selEmp.id===node.id
+                            ? `linear-gradient(135deg, ${color}44, ${color}22)`
+                            : isRoot ? `linear-gradient(135deg, #1B3A5C, #0d2040)` : `linear-gradient(135deg, #1a1a2e, #12122a)`,
+                        border: `2px solid ${selEmp&&selEmp.id===node.id ? color : color+'55'}`,
+                        borderRadius: isRoot ? 16 : 12,
+                        padding: isRoot ? '20px 24px' : '12px 16px',
+                        minWidth: isRoot ? 180 : 150,
+                        maxWidth: isRoot ? 200 : 170,
+                        textAlign:'center',
+                        transition:'all .2s ease',
+                        boxShadow: selEmp&&selEmp.id===node.id
+                            ? `0 0 24px ${color}66, 0 8px 32px rgba(0,0,0,.6)`
+                            : `0 4px 20px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.05)`,
+                        position:'relative',
+                        zIndex: selEmp&&selEmp.id===node.id ? 2 : 1,
+                    }
+                },
+                    // Avatar
+                    React.createElement('div', { style:{
+                        width: isRoot ? 56 : 44, height: isRoot ? 56 : 44,
+                        borderRadius:'50%', margin:'0 auto 10px',
+                        background:`linear-gradient(135deg, ${color}, ${color}88)`,
+                        display:'flex', alignItems:'center', justifyContent:'center',
+                        fontSize: isRoot ? 18 : 14, fontWeight:900, color:'#fff',
+                        border:`3px solid ${color}66`,
+                        boxShadow:`0 0 16px ${color}44`,
+                    }}, initials(node.name)),
+                    // Name
+                    React.createElement('div', { style:{
+                        fontSize: isRoot ? 13 : 11,
+                        fontWeight:800, color:'#fff',
+                        marginBottom:4, lineHeight:1.3,
+                        fontFamily:'DM Mono, monospace',
+                    }}, node.name),
+                    // Role
+                    React.createElement('div', { style:{
+                        fontSize: isRoot ? 10 : 9,
+                        color: color,
+                        fontWeight:600,
+                        marginBottom:6,
+                        fontFamily:'DM Mono, monospace',
+                    }}, node.role||'—'),
+                    // Badges
+                    React.createElement('div', { style:{ display:'flex', gap:4, justifyContent:'center', flexWrap:'wrap' } },
+                        React.createElement('span', { style:{
+                            fontSize:8, padding:'2px 6px',
+                            background:`${color}18`, border:`1px solid ${color}44`,
+                            color, borderRadius:20, fontFamily:'monospace',
+                        }}, (depts.find(d=>d.id===node.dept)||{}).name||'—'),
+                        React.createElement('span', { style:{ fontSize:12 } }, flag(node.country))),
+                    // Children count badge
+                    hasChildren && React.createElement('div', {
+                        onClick: e => { e.stopPropagation(); setExpanded(!expanded); },
+                        style:{
+                            position:'absolute', bottom:-10, left:'50%', transform:'translateX(-50%)',
+                            background: color, color:'#fff', fontSize:9, fontWeight:900,
+                            borderRadius:20, padding:'2px 8px', cursor:'pointer',
+                            boxShadow:`0 2px 8px ${color}66`,
+                        }
+                    }, expanded ? `▲ ${node.children.length}` : `▼ ${node.children.length}`))),
+
+            // Children
+            expanded && hasChildren && React.createElement('div', { style:{ marginTop:32, position:'relative' } },
+                // Horizontal connector
+                node.children.length > 1 && React.createElement('div', { style:{
+                    position:'absolute', top:0, left:'50%', transform:'translateX(-50%)',
+                    width:`calc(100% - 80px)`, height:2,
+                    background:`linear-gradient(to right, ${color}00, ${color}66, ${color}00)`,
+                    zIndex:0,
+                }}),
+                React.createElement('div', { style:{
+                    display:'flex', gap: node.children.length > 4 ? 12 : 24,
+                    alignItems:'flex-start', justifyContent:'center',
+                    flexWrap: node.children.length > 6 ? 'wrap' : 'nowrap',
+                    paddingTop:0,
+                }},
+                    node.children.map((child, i) =>
+                        React.createElement(OrgNode, { key:child.id, node:child, depth:depth+1, isLast:i===node.children.length-1 })))));
+    };
+
+    return React.createElement('div', { style:{ minHeight:600, fontFamily:'DM Mono, monospace' } },
+        // Toolbar
+        React.createElement('div', { style:{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:24, flexWrap:'wrap', gap:12 } },
+            React.createElement('div', null,
+                React.createElement('div', { style:{ fontSize:22, fontWeight:900, color:'#fff', letterSpacing:'-0.02em' } }, '組織図 Organigrama'),
+                React.createElement('div', { style:{ fontSize:10, color:'#555', marginTop:2 } }, emps.length + ' colaboradores · ' + depts.length + ' departamentos')),
+            React.createElement('div', { style:{ display:'flex', gap:10, alignItems:'center' } },
+                React.createElement('select', { value:filterDept, onChange:e=>setFilterDept(e.target.value),
+                    style:{ padding:'6px 10px', background:'#1a1a2e', border:'1px solid #334', color:'#fff', fontFamily:'monospace', fontSize:11 } },
+                    React.createElement('option', { value:'all' }, '🏢 Todos los departamentos'),
+                    depts.map(d => React.createElement('option', { key:d.id, value:d.id }, d.name))),
+                React.createElement('button', { onClick:()=>setZoom(z=>Math.min(1.5,z+0.1)),
+                    style:{ padding:'6px 12px', background:'#1a1a2e', border:'1px solid #334', color:'#fff', fontFamily:'monospace', fontSize:12, cursor:'pointer' } }, '+'),
+                React.createElement('span', { style:{ fontSize:10, color:'#555', minWidth:35, textAlign:'center' } }, Math.round(zoom*100)+'%'),
+                React.createElement('button', { onClick:()=>setZoom(z=>Math.max(0.4,z-0.1)),
+                    style:{ padding:'6px 12px', background:'#1a1a2e', border:'1px solid #334', color:'#fff', fontFamily:'monospace', fontSize:12, cursor:'pointer' } }, '−'))),
+
+        // No data state
+        emps.filter(e=>e.reports_to).length === 0 && React.createElement('div', { style:{ padding:'24px 20px', background:'#1a1a2e', border:'1px dashed #334', borderRadius:8, marginBottom:20 } },
+            React.createElement('div', { style:{ fontSize:12, color:'#ffa94d', fontWeight:700, marginBottom:6 } }, '⚠ Sin jerarquías configuradas'),
+            React.createElement('div', { style:{ fontSize:11, color:'#666' } }, 'Ve a RRHH → Empleados → edita cada empleado y asigna el campo "Reporta a" para construir el organigrama.')),
+
+        // Org chart
+        React.createElement('div', { style:{ overflowX:'auto', overflowY:'auto', paddingBottom:40 } },
+            React.createElement('div', { style:{
+                transform:`scale(${zoom})`, transformOrigin:'top center',
+                transition:'transform .3s ease',
+                paddingTop:24, paddingBottom:80,
+                minWidth: 'fit-content',
+                display:'flex', flexDirection:'column', alignItems:'center',
+            }},
+                tree.length === 0
+                    ? React.createElement('div', { style:{ padding:60, color:'#555', textAlign:'center' } }, 'Sin empleados en este departamento')
+                    : React.createElement('div', { style:{ display:'flex', gap:40, justifyContent:'center', flexWrap:'wrap', alignItems:'flex-start' } },
+                        tree.map(root => React.createElement(OrgNode, { key:root.id, node:root, depth:0 }))))),
+
+        // Detail panel
+        selEmp && React.createElement('div', { style:{
+            position:'fixed', right:24, top:'50%', transform:'translateY(-50%)',
+            width:280, background:'#1a1a2e',
+            border:`2px solid ${getDeptColor(selEmp)}66`,
+            borderRadius:16, padding:20, zIndex:1000,
+            boxShadow:`0 0 40px ${getDeptColor(selEmp)}33, 0 20px 60px rgba(0,0,0,.6)`,
+            fontFamily:'monospace',
+        } },
+            React.createElement('button', { onClick:()=>setSelEmp(null),
+                style:{ position:'absolute', top:12, right:12, background:'none', border:'none', color:'#555', cursor:'pointer', fontSize:16 } }, '✕'),
+            React.createElement('div', { style:{
+                width:64, height:64, borderRadius:'50%', margin:'0 auto 12px',
+                background:`linear-gradient(135deg, ${getDeptColor(selEmp)}, ${getDeptColor(selEmp)}88)`,
+                display:'flex', alignItems:'center', justifyContent:'center',
+                fontSize:22, fontWeight:900, color:'#fff',
+                boxShadow:`0 0 24px ${getDeptColor(selEmp)}66`,
+            }}, initials(selEmp.name)),
+            React.createElement('div', { style:{ textAlign:'center', marginBottom:16 } },
+                React.createElement('div', { style:{ fontSize:15, fontWeight:900, color:'#fff', marginBottom:4 } }, selEmp.name),
+                React.createElement('div', { style:{ fontSize:11, color: getDeptColor(selEmp) } }, selEmp.role||'—'),
+                React.createElement('div', { style:{ fontSize:10, color:'#555', marginTop:4 } }, flag(selEmp.country) + ' ' + (selEmp.country||'—'))),
+            React.createElement('div', { style:{ display:'flex', flexDirection:'column', gap:6 } },
+                [
+                    ['Departamento', (depts.find(d=>d.id===selEmp.dept)||{}).name||'—'],
+                    ['Salario', selEmp.currency + ' $' + (selEmp.salary||0).toLocaleString()],
+                    ['Jornada', selEmp.payroll||'—'],
+                    ['Email', selEmp.email||'—'],
+                    ['Teléfono', selEmp.phone||'—'],
+                    ['Reporta a', emps.find(e=>e.id===selEmp.reports_to)?.name||'Nivel raíz'],
+                    ['Reportes directos', emps.filter(e=>e.reports_to===selEmp.id).length + ' persona(s)'],
+                ].map(([l,v]) => React.createElement('div', { key:l, style:{ display:'flex', justifyContent:'space-between', padding:'5px 0', borderBottom:'1px solid #223' } },
+                    React.createElement('span', { style:{ fontSize:9, color:'#555' } }, l),
+                    React.createElement('span', { style:{ fontSize:10, color:'#aaa', maxWidth:160, textAlign:'right', wordBreak:'break-all' } }, v))))));
+};
+
 const ViewRRHH = ({ db, upsertEmployee, deleteEmployee, upsertLocation, deleteLocation, upsertDepartment, deleteDepartment, upsertSystemUser }) => {
     const { t } = useT();
     const [tab, setTab] = useState("onboarding");
@@ -12162,10 +12378,11 @@ const ViewRRHH = ({ db, upsertEmployee, deleteEmployee, upsertLocation, deleteLo
     }));
 
     const TABS = [
-        { id: "onboarding", label: t("rrhh_tab_onboarding"), icon: ClipboardList },
-        { id: "employees", label: t("rrhh_tab_employees"), icon: Users },
-        { id: "departments", label: t("rrhh_tab_departments"), icon: Building2 },
-        { id: "locations", label: t("rrhh_tab_locations"), icon: MapPin },
+        { id: "onboarding",    label: t("rrhh_tab_onboarding"),  icon: ClipboardList },
+        { id: "employees",     label: t("rrhh_tab_employees"),   icon: Users         },
+        { id: "departments",   label: t("rrhh_tab_departments"), icon: Building2     },
+        { id: "locations",     label: t("rrhh_tab_locations"),   icon: MapPin        },
+        { id: "organigrama",   label: "ORGANIGRAMA",              icon: GitBranch     },
     ];
 
     return React.createElement("div", null,
@@ -12521,7 +12738,8 @@ const ViewRRHH = ({ db, upsertEmployee, deleteEmployee, upsertLocation, deleteLo
         ),
 
         // ── TAB: LOCATIONS ─────────────────────────────────────────
-        tab === "locations" && React.createElement(ViewLocations, { db, upsertLocation, deleteLocation })
+        tab === "locations" && React.createElement(ViewLocations, { db, upsertLocation, deleteLocation }),
+        tab === "organigrama" && React.createElement(ViewOrganigrama, { db })
     );
 };
 const NAV = [
