@@ -39,6 +39,17 @@ async function initDB() {
     CREATE TABLE IF NOT EXISTS system_users (id TEXT PRIMARY KEY, username TEXT UNIQUE NOT NULL, data JSONB NOT NULL, updated_at TIMESTAMPTZ DEFAULT NOW());
     CREATE TABLE IF NOT EXISTS tax_ytd      (emp_id TEXT PRIMARY KEY, data JSONB NOT NULL, updated_at TIMESTAMPTZ DEFAULT NOW());
     CREATE TABLE IF NOT EXISTS company_cfg  (id TEXT PRIMARY KEY DEFAULT 'main', data JSONB NOT NULL DEFAULT '{}', updated_at TIMESTAMPTZ DEFAULT NOW());
+    CREATE TABLE IF NOT EXISTS fiscal_periods (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        date_start DATE NOT NULL,
+        date_end DATE NOT NULL,
+        status TEXT DEFAULT 'abierto',
+        closed_by TEXT,
+        closed_at TIMESTAMPTZ,
+        data JSONB NOT NULL DEFAULT '{}',
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
     CREATE INDEX IF NOT EXISTS idx_tr_emp  ON time_records(emp_id);
     CREATE INDEX IF NOT EXISTS idx_tr_date ON time_records(record_date);
   `);
@@ -229,6 +240,109 @@ app.put('/api/company', requireAuth, async (req, res) => {
 app.get('/api/health', async (req, res) => {
   try { await pool.query('SELECT 1'); res.json({ ok: true, ts: new Date().toISOString() }); }
   catch { res.status(503).json({ ok: false }); }
+});
+
+// ── FISCAL PERIODS ────────────────────────────────────────────────────
+app.get('/api/fiscal-periods', requireAuth, async (req, res) => {
+  try {
+    const r = await pool.query('SELECT * FROM fiscal_periods ORDER BY date_start DESC');
+    res.json(r.rows);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.put('/api/fiscal-periods/:id', requireAuth, async (req, res) => {
+  const { id } = req.params;
+  const { name, date_start, date_end, status, closed_by, data } = req.body;
+  try {
+    await pool.query(`INSERT INTO fiscal_periods(id,name,date_start,date_end,status,closed_by,closed_at,data)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8)
+      ON CONFLICT(id) DO UPDATE SET name=$2,date_start=$3,date_end=$4,status=$5,
+        closed_by=$6,closed_at=$7,data=$8,updated_at=NOW()`,
+      [id, name, date_start, date_end, status||'abierto', closed_by||null,
+       status==='cerrado' ? new Date().toISOString() : null,
+       JSON.stringify(data||{})]);
+    console.log('[fiscal-period]', status==='cerrado'?'CLOSED':'saved', id, name);
+    res.json({ ok: true });
+  } catch(e) { console.error('[fiscal-period]', e.message); res.status(500).json({ error: e.message }); }
+});
+
+// ── CLOSE FISCAL PERIOD — freeze all payroll cuts in range ────────────
+app.post('/api/fiscal-periods/:id/close', requireAuth, async (req, res) => {
+  const { id } = req.params;
+  try {
+    // Get the period
+    const p = await pool.query('SELECT * FROM fiscal_periods WHERE id=$1', [id]);
+    if (!p.rows.length) return res.status(404).json({ error: 'Period not found' });
+    const period = p.rows[0];
+    if (period.status === 'cerrado') return res.status(400).json({ error: 'Period already closed' });
+
+    // Get all authorized/dispersed payroll cuts within the period date range
+    const cuts = await pool.query(
+      `SELECT id, data FROM payroll_cuts 
+       WHERE (data->>'date' >= $1 AND data->>'date' <= $2)
+       AND status IN ('autorizado','dispersado')`,
+      [period.date_start, period.date_end]
+    );
+
+    // Compute accumulated totals per employee
+    const empAccum = {};
+    for (const cut of cuts.rows) {
+      const snap = cut.data.empSnapshot || [];
+      for (const s of snap) {
+        if (!empAccum[s.id]) empAccum[s.id] = {
+          id: s.id, name: s.name, country: s.country,
+          grossTotal: 0, isrTotal: 0, imssObrTotal: 0, imssPatTotal: 0,
+          netTotal: 0, cutsCount: 0,
+          perceptions: {}, deductions: {},
+          cuts: []
+        };
+        const acc = empAccum[s.id];
+        acc.grossTotal  += (s.base||0);
+        acc.netTotal    += (s.net||0);
+        acc.isrTotal    += (s.deds&&s.deds['ISR Art. 96 LISR']||0);
+        acc.imssObrTotal+= (s.deds&&s.deds['IMSS Invalidez y Vida']||0)+(s.deds&&s.deds['IMSS Cesantía y Vejez']||0)+(s.deds&&s.deds['IMSS Enf. y Maternidad']||0);
+        acc.cutsCount++;
+        // Accumulate each deduction line
+        if (s.deds) {
+          for (const [k,v] of Object.entries(s.deds)) {
+            acc.deductions[k] = (acc.deductions[k]||0) + (v||0);
+          }
+        }
+        acc.cuts.push({ cutId: cut.id, date: cut.data.date||cut.data.period, base: s.base, net: s.net });
+      }
+    }
+
+    // Save accumulated data into the period
+    const periodData = {
+      ...period.data,
+      cutIds: cuts.rows.map(c=>c.id),
+      employeeAccum: empAccum,
+      closedAt: new Date().toISOString(),
+      closedBy: req.session.name || req.session.id,
+      totalCuts: cuts.rows.length,
+      totalEmployees: Object.keys(empAccum).length,
+      grandGross: Object.values(empAccum).reduce((a,e)=>a+e.grossTotal,0),
+      grandISR:   Object.values(empAccum).reduce((a,e)=>a+e.isrTotal,0),
+      grandNet:   Object.values(empAccum).reduce((a,e)=>a+e.netTotal,0),
+    };
+
+    // Freeze all cuts in this period
+    for (const cut of cuts.rows) {
+      await pool.query(
+        "UPDATE payroll_cuts SET status='congelado', data=data||$1, updated_at=NOW() WHERE id=$2",
+        [JSON.stringify({fiscalPeriodId: id, frozen: true}), cut.id]
+      );
+    }
+
+    // Close the period
+    await pool.query(
+      `UPDATE fiscal_periods SET status='cerrado', closed_by=$1, closed_at=NOW(), data=$2, updated_at=NOW() WHERE id=$3`,
+      [req.session.name||req.session.id, JSON.stringify(periodData), id]
+    );
+
+    console.log('[fiscal-period] CLOSED:', id, '- cuts frozen:', cuts.rows.length, '- employees:', Object.keys(empAccum).length);
+    res.json({ ok: true, summary: { cuts: cuts.rows.length, employees: Object.keys(empAccum).length, grandGross: periodData.grandGross } });
+  } catch(e) { console.error('[fiscal-period/close]', e.message); res.status(500).json({ error: e.message }); }
 });
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, '../public/index.html')));
 
