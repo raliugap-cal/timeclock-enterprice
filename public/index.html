@@ -6399,74 +6399,80 @@ const ViewReportesNomina = ({ db, updatePayrollCut, reloadFromAPI, loading }) =>
         React.createElement('div', { style: { fontSize: 16, color: '#fff', marginBottom: 8 } }, 'Sin cortes con detalle de empleados'),
         React.createElement('div', { style: { fontSize: 12, color: '#aaa' } }, 'Genera un corte desde Nómina → Nuevo Corte'));
 
-    const cut = localCuts[0];
-    const snaps = cut.empSnapshot || [];
-    const depts = (db && db.departments) || [];
-    const fmt = n => '$' + Math.round(n||0).toLocaleString('es-MX');
+    // cut defined in return section
+    // snaps defined in return section
+    // depts defined in return
+    // fmt defined in return
+
+    // cut defined in return section
+    // snaps defined in return section
+    // depts defined in return
+    // fmt defined in return
+    // fmtD defined in return
+
+    // Snapshot data is in root of each employee object (not in s.calc)
+    // getISR defined in return
+    // getIMSS defined in return
+    // getOtras defined in return
 
     return React.createElement('div', { style: { padding: 24, fontFamily: 'monospace' } },
         React.createElement('div', { style: { fontSize: 20, fontWeight: 800, color: '#fff', marginBottom: 8 } }, 'Reportes de Nómina'),
         React.createElement('div', { style: { fontSize: 12, color: '#aaa', marginBottom: 20 } },
-            localCuts.length + ' cortes · ' + snaps.length + ' empleados en corte seleccionado'),
+            localCuts.length + ' cortes · ' + snaps.length + ' empleados'),
 
-        // Selector de corte
         React.createElement('select', {
             onChange: e => {
                 const c = localCuts.find(x => x.id === e.target.value);
-                if (c) setLocalCuts(prev => [c, ...prev.filter(x => x.id !== c.id)]);
+                if (c) setLocalCuts([c, ...localCuts.filter(x => x.id !== c.id)]);
             },
             style: { marginBottom: 20, padding: '8px 12px', background: '#1a1a2e', border: '1px solid #333', color: '#fff', fontFamily: 'monospace', fontSize: 12, width: '100%' }
         }, localCuts.map(c => React.createElement('option', { key: c.id, value: c.id },
-            (c.period || c.date || c.id) + ' — ' + (c.empSnapshot||[]).length + ' emp — ' + (c.status||'pendiente').toUpperCase()))),
+            (c.period||c.date||c.id) + ' — ' + (c.empSnapshot||[]).length + ' emp — ' + (c.status||'pendiente').toUpperCase()))),
 
-        // KPIs
         React.createElement('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(5,1fr)', gap: 12, marginBottom: 24 } },
             [
-                { l: 'EMPLEADOS',   v: snaps.length },
-                { l: 'BRUTO',       v: fmt(snaps.reduce((s,e) => s+(e.calc&&e.calc.base||0),0)) },
-                { l: 'ISR',         v: fmt(snaps.reduce((s,e) => s+(e.calc&&(e.calc.isr||e.calc.fedTax)||0),0)) },
-                { l: 'IMSS OBRERO', v: fmt(snaps.reduce((s,e) => s+(e.calc&&e.calc.imssOb||0),0)) },
-                { l: 'NETO',        v: fmt(snaps.reduce((s,e) => s+(e.calc&&e.calc.net||0),0)) },
-            ].map(k => React.createElement('div', { key: k.l, style: { background: '#1a1a2e', border: '1px solid #333', padding: '12px 16px' } },
-                React.createElement('div', { style: { fontSize: 9, color: '#666', marginBottom: 4 } }, k.l),
-                React.createElement('div', { style: { fontSize: 16, fontWeight: 900, color: '#fff' } }, k.v)))),
+                { l: 'EMPLEADOS',   v: snaps.length,                                              c: '#74c0fc' },
+                { l: 'BRUTO',       v: fmt(snaps.reduce((a,s) => a+(s.base||0),          0)),    c: '#fff'    },
+                { l: 'ISR NETO',    v: fmt(snaps.reduce((a,s) => a+getISR(s),            0)),    c: '#ff6b6b' },
+                { l: 'IMSS OBRERO', v: fmt(snaps.reduce((a,s) => a+getIMSS(s),           0)),    c: '#ffa94d' },
+                { l: 'NETO A PAGAR',v: fmt(snaps.reduce((a,s) => a+(s.net||0),           0)),    c: '#51cf66' },
+            ].map(k => React.createElement('div', { key: k.l, style: { background: '#1a1a2e', border: '1px solid #333', padding: '14px 16px', borderRadius: 4 } },
+                React.createElement('div', { style: { fontSize: 9, color: '#666', marginBottom: 4, letterSpacing: '0.08em' } }, k.l),
+                React.createElement('div', { style: { fontSize: 18, fontWeight: 900, color: k.c } }, k.v)))),
 
-        // Tabla
         React.createElement('div', { style: { overflowX: 'auto' } },
             React.createElement('table', { style: { width: '100%', borderCollapse: 'collapse', fontSize: 11 } },
                 React.createElement('thead', null,
                     React.createElement('tr', { style: { background: '#1a1a2e', borderBottom: '2px solid #333' } },
-                        ['#','EMPLEADO','PAÍS','BRUTO','ISR','IMSS OB.','OTRAS DED.','NETO','STATUS'].map(h =>
-                            React.createElement('th', { key: h, style: { padding: '8px 6px', textAlign: h==='EMPLEADO'?'left':'right', color: '#666', fontSize: 9 } }, h)))),
+                        ['#','EMPLEADO','DEPTO','PAÍS','DÍAS','BRUTO','ISR NETO','IMSS OB.','OTRAS DED.','NETO','TASA EFE.','STATUS'].map(h =>
+                            React.createElement('th', { key: h, style: { padding: '8px 6px', textAlign: h==='EMPLEADO'||h==='DEPTO'?'left':'right', color: '#666', fontSize: 9, letterSpacing:'0.06em' } }, h)))),
                 React.createElement('tbody', null,
                     snaps.map((s, i) => {
-                        const c = s.calc || {};
-                        const isr = c.isr||c.fedTax||0;
-                        const imss = c.imssOb||0;
-                        const otras = Math.max(0,(c.totalDed||0)-isr-imss);
-                        const ok = c.net > 0;
-                        return React.createElement('tr', { key: s.id||i, style: { borderBottom: '1px solid #222', background: ok?'transparent':'rgba(255,0,0,0.05)' } },
-                            React.createElement('td', { style: { padding: '7px 6px', color: '#666', textAlign: 'right' } }, i+1),
+                        const ok = (s.net||0) > 0;
+                        return React.createElement('tr', { key: s.id||i, style: { borderBottom: '1px solid #222', background: ok?'transparent':'rgba(255,80,80,0.06)' } },
+                            React.createElement('td', { style: { padding: '7px 6px', color: '#555', textAlign: 'right' } }, i+1),
                             React.createElement('td', { style: { padding: '7px 6px' } },
                                 React.createElement('div', { style: { color: '#fff', fontWeight: 700 } }, s.name),
-                                React.createElement('div', { style: { fontSize: 9, color: '#666' } }, (depts.find(d=>d.id===s.dept)||{}).name||'—')),
+                                React.createElement('div', { style: { fontSize: 9, color: '#555' } }, s.id)),
+                            React.createElement('td', { style: { padding: '7px 6px', color: '#aaa', fontSize: 10 } }, s.dept||'—'),
                             React.createElement('td', { style: { padding: '7px 6px', textAlign: 'center' } }, {MX:'🇲🇽',US:'🇺🇸',RD:'🇩🇴',SV:'🇸🇻'}[s.country]||s.country||'—'),
-                            React.createElement('td', { style: { padding: '7px 6px', textAlign: 'right', color: '#fff', fontWeight: 700 } }, fmt(c.base)),
-                            React.createElement('td', { style: { padding: '7px 6px', textAlign: 'right', color: '#ff6b6b' } }, fmt(isr)),
-                            React.createElement('td', { style: { padding: '7px 6px', textAlign: 'right', color: '#ffa94d' } }, fmt(imss)),
-                            React.createElement('td', { style: { padding: '7px 6px', textAlign: 'right', color: '#999' } }, fmt(otras)),
-                            React.createElement('td', { style: { padding: '7px 6px', textAlign: 'right', color: '#51cf66', fontWeight: 900 } }, fmt(c.net)),
-                            React.createElement('td', { style: { padding: '7px 6px', textAlign: 'center', color: ok?'#51cf66':'#ff6b6b', fontSize: 9, fontWeight: 700 } }, ok?'✓ OK':'⚠ ERR'));
+                            React.createElement('td', { style: { padding: '7px 6px', textAlign: 'right', color: '#aaa' } }, s.periodDays||'—'),
+                            React.createElement('td', { style: { padding: '7px 6px', textAlign: 'right', color: '#fff', fontWeight: 700 } }, fmtD(s.base||0)),
+                            React.createElement('td', { style: { padding: '7px 6px', textAlign: 'right', color: '#ff6b6b' } }, fmtD(getISR(s))),
+                            React.createElement('td', { style: { padding: '7px 6px', textAlign: 'right', color: '#ffa94d' } }, fmtD(getIMSS(s))),
+                            React.createElement('td', { style: { padding: '7px 6px', textAlign: 'right', color: '#888' } }, fmtD(getOtras(s))),
+                            React.createElement('td', { style: { padding: '7px 6px', textAlign: 'right', color: '#51cf66', fontWeight: 900, fontSize: 12 } }, fmtD(s.net||0)),
+                            React.createElement('td', { style: { padding: '7px 6px', textAlign: 'right', color: '#aaa', fontSize: 10 } }, (s.effectiveRate||'0') + '%'),
+                            React.createElement('td', { style: { padding: '7px 6px', textAlign: 'center', fontSize: 10, fontWeight: 700, color: ok?'#51cf66':'#ff6b6b' } }, ok?'✓ OK':'⚠ ERR'));
                     }),
-                    // Total row
-                    React.createElement('tr', { style: { borderTop: '2px solid #333', background: '#1a1a2e', fontWeight: 900 } },
-                        React.createElement('td', { colSpan: 3, style: { padding: '8px 6px', color: '#fff', fontSize: 10 } }, 'TOTAL — ' + snaps.length + ' empleados'),
-                        React.createElement('td', { style: { padding: '8px 6px', textAlign: 'right', color: '#fff' } }, fmt(snaps.reduce((s,e)=>s+(e.calc&&e.calc.base||0),0))),
-                        React.createElement('td', { style: { padding: '8px 6px', textAlign: 'right', color: '#ff6b6b' } }, fmt(snaps.reduce((s,e)=>s+(e.calc&&(e.calc.isr||e.calc.fedTax)||0),0))),
-                        React.createElement('td', { style: { padding: '8px 6px', textAlign: 'right', color: '#ffa94d' } }, fmt(snaps.reduce((s,e)=>s+(e.calc&&e.calc.imssOb||0),0))),
-                        React.createElement('td', { style: { padding: '8px 6px', textAlign: 'right', color: '#999' } }, '—'),
-                        React.createElement('td', { style: { padding: '8px 6px', textAlign: 'right', color: '#51cf66' } }, fmt(snaps.reduce((s,e)=>s+(e.calc&&e.calc.net||0),0))),
-                        React.createElement('td', null))))));
+                    React.createElement('tr', { style: { borderTop: '2px solid #333', background: '#1a1a2e' } },
+                        React.createElement('td', { colSpan: 5, style: { padding: '10px 6px', color: '#fff', fontSize: 11, fontWeight: 900 } }, 'TOTAL — ' + snaps.length + ' empleados'),
+                        React.createElement('td', { style: { padding: '10px 6px', textAlign: 'right', color: '#fff', fontWeight: 900 } }, fmtD(snaps.reduce((a,s)=>a+(s.base||0),0))),
+                        React.createElement('td', { style: { padding: '10px 6px', textAlign: 'right', color: '#ff6b6b', fontWeight: 900 } }, fmtD(snaps.reduce((a,s)=>a+getISR(s),0))),
+                        React.createElement('td', { style: { padding: '10px 6px', textAlign: 'right', color: '#ffa94d', fontWeight: 900 } }, fmtD(snaps.reduce((a,s)=>a+getIMSS(s),0))),
+                        React.createElement('td', { style: { padding: '10px 6px', textAlign: 'right', color: '#888', fontWeight: 900 } }, fmtD(snaps.reduce((a,s)=>a+getOtras(s),0))),
+                        React.createElement('td', { style: { padding: '10px 6px', textAlign: 'right', color: '#51cf66', fontWeight: 900, fontSize: 13 } }, fmtD(snaps.reduce((a,s)=>a+(s.net||0),0))),
+                        React.createElement('td', { colSpan: 2 }))))));
 };
 
 
