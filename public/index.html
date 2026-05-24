@@ -6383,8 +6383,15 @@ const ViewReportesNomina = ({ db, updatePayrollCut, reloadFromAPI, loading }) =>
             return;
         }
         window.TC_API.loadDB()
-            .then(data => setLocalCuts((data.payrollCuts || []).slice().sort((a,b) => new Date(b.date||0) - new Date(a.date||0))))
-            .catch(() => setLocalCuts([]));
+            .then(data => {
+                const c = (data.payrollCuts || []).slice().sort((a,b) => new Date(b.date||0) - new Date(a.date||0));
+                console.log('[Reportes] cuts:', c.length, 'conSnap:', c.filter(x => x.empSnapshot && x.empSnapshot.length > 0).length);
+                setLocalCuts(c);
+            })
+            .catch(err => {
+                console.error('[Reportes] loadDB error:', err);
+                setLocalCuts([]); // show "sin cortes" message
+            });
     }, []);
 
     // ALL hooks before any conditional return
