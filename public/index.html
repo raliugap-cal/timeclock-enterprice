@@ -6367,7 +6367,7 @@ const ViewDepartments = ({ db, upsertDepartment, deleteDepartment }) => {
 // ══════════════════════════════════════════════════════════════════════
 const ViewPeriodosFiscales = ({ db }) => {
     const [periods, setPeriods] = React.useState(null);
-    const [modal, setModal] = React.useState(null); // null | 'new' | {period}
+    const [modal, setModal] = React.useState(null);
     const [form, setForm] = React.useState({ name:'', date_start:'', date_end:'' });
     const [selPeriod, setSelPeriod] = React.useState(null);
     const [closing, setClosing] = React.useState(false);
@@ -6384,6 +6384,43 @@ const ViewPeriodosFiscales = ({ db }) => {
             .catch(() => setPeriods([]));
     }, []);
 
+    // Get payroll cuts that fall within a period's date range
+    const getCutsInPeriod = (period) => {
+        const allCuts = (db && db.payrollCuts) || [];
+        const start = period.date_start;
+        const end   = period.date_end;
+        return allCuts.filter(c => {
+            const d = c.date || c.dateFrom || c.from || '';
+            if (!d) return false;
+            return d >= start && d <= end;
+        });
+    };
+
+    // Build employee accumulation from cuts in period
+    const buildAccum = (cuts) => {
+        const empAccum = {};
+        for (const cut of cuts) {
+            const snap = cut.empSnapshot || [];
+            for (const s of snap) {
+                if (!empAccum[s.id]) empAccum[s.id] = {
+                    id: s.id, name: s.name, country: s.country,
+                    grossTotal: 0, isrTotal: 0, imssObrTotal: 0, netTotal: 0,
+                    cutsCount: 0, cuts: []
+                };
+                const acc = empAccum[s.id];
+                const isr  = Math.max(0, (s.deds&&s.deds['ISR Art. 96 LISR']||0) - (s.deds&&s.deds['Subsidio al Empleo']||0));
+                const imss = (s.deds&&s.deds['IMSS Invalidez y Vida']||0) + (s.deds&&s.deds['IMSS Cesantía y Vejez']||0) + (s.deds&&s.deds['IMSS Enf. y Maternidad']||0);
+                acc.grossTotal   += (s.base||0);
+                acc.netTotal     += (s.net||0);
+                acc.isrTotal     += isr;
+                acc.imssObrTotal += imss;
+                acc.cutsCount++;
+                acc.cuts.push({ cutId: cut.id, period: cut.period||cut.date, base: s.base||0, net: s.net||0, isr, imss });
+            }
+        }
+        return Object.values(empAccum).sort((a,b) => a.name.localeCompare(b.name));
+    };
+
     const handleSave = () => {
         if (!form.name || !form.date_start || !form.date_end) { setMsg({ type:'error', text:'Completa todos los campos' }); return; }
         const id = 'fp' + Date.now();
@@ -6397,7 +6434,12 @@ const ViewPeriodosFiscales = ({ db }) => {
     };
 
     const handleClose = (period) => {
-        if (!window.confirm(`¿Cerrar el período "${period.name}"? Esta acción es irreversible — todos los cortes autorizados en este rango quedarán congelados.`)) return;
+        const cutsInRange = getCutsInPeriod(period);
+        if (cutsInRange.length === 0) {
+            setMsg({ type:'error', text:'No hay cortes de nómina en el rango de fechas de este período.' });
+            return;
+        }
+        if (!window.confirm(`¿Cerrar el período "${period.name}"?\n\n${cutsInRange.length} corte(s) encontrados en el rango.\nEsta acción es IRREVERSIBLE.`)) return;
         setClosing(period.id);
         window.TC_API.closeFiscalPeriod(period.id)
             .then(res => {
@@ -6409,6 +6451,56 @@ const ViewPeriodosFiscales = ({ db }) => {
     };
 
     if (periods === null) return React.createElement('div', { style:{ padding:40, textAlign:'center', color:'#aaa' } }, '⏳ Cargando períodos...');
+
+    const depts = (db&&db.departments)||[];
+
+    // Reusable accumulation table
+    const buildAccumTable = (empList, detailEmp, setDetailEmp, fmtD, depts) =>
+        React.createElement('div', { style:{ overflowX:'auto' } },
+            React.createElement('table', { style:{ width:'100%', borderCollapse:'collapse', fontSize:11 } },
+                React.createElement('thead', null,
+                    React.createElement('tr', { style:{ background:'#12122a' } },
+                        ['EMPLEADO','🌎','CORTES','BRUTO ACUM.','ISR ACUM.','IMSS ACUM.','NETO ACUM.','▼'].map(h =>
+                            React.createElement('th', { key:h, style:{ padding:'7px 7px', textAlign:h==='EMPLEADO'?'left':'right', color:'#555', fontSize:9, borderBottom:'1px solid #334' } }, h)))),
+                React.createElement('tbody', null,
+                    empList.map((e, i) => React.createElement(React.Fragment, { key:e.id },
+                        React.createElement('tr', { style:{ borderBottom:'1px solid #223', background:i%2===0?'transparent':'#ffffff05', cursor:'pointer' },
+                            onClick:()=>setDetailEmp(detailEmp&&detailEmp.id===e.id?null:e) },
+                            React.createElement('td', { style:{ padding:'7px 7px' } },
+                                React.createElement('div', { style:{ color:'#fff', fontWeight:700 } }, e.name),
+                                React.createElement('div', { style:{ fontSize:9, color:'#555' } }, e.id)),
+                            React.createElement('td', { style:{ padding:'7px', textAlign:'center' } }, {MX:'🇲🇽',US:'🇺🇸',RD:'🇩🇴',SV:'🇸🇻'}[e.country]||'—'),
+                            React.createElement('td', { style:{ padding:'7px', textAlign:'right', color:'#aaa' } }, e.cutsCount),
+                            React.createElement('td', { style:{ padding:'7px', textAlign:'right', color:'#fff', fontWeight:700 } }, fmtD(e.grossTotal||0)),
+                            React.createElement('td', { style:{ padding:'7px', textAlign:'right', color:'#ff6b6b' } }, fmtD(e.isrTotal||0)),
+                            React.createElement('td', { style:{ padding:'7px', textAlign:'right', color:'#ffa94d' } }, fmtD(e.imssObrTotal||0)),
+                            React.createElement('td', { style:{ padding:'7px', textAlign:'right', color:'#22c55e', fontWeight:900 } }, fmtD(e.netTotal||0)),
+                            React.createElement('td', { style:{ padding:'7px', textAlign:'right', color:'#74c0fc', fontSize:10 } }, detailEmp&&detailEmp.id===e.id?'▲':'▼')),
+                        detailEmp&&detailEmp.id===e.id && React.createElement('tr', null,
+                            React.createElement('td', { colSpan:8, style:{ padding:'10px 14px', background:'#0a0a1e', borderBottom:'2px solid #334' } },
+                                React.createElement('div', { style:{ fontSize:10, color:'#74c0fc', marginBottom:8, fontWeight:700 } }, '📋 DETALLE POR CORTE — ' + e.name),
+                                React.createElement('table', { style:{ width:'100%', borderCollapse:'collapse', fontSize:10 } },
+                                    React.createElement('thead', null,
+                                        React.createElement('tr', null,
+                                            ['PERÍODO','BRUTO','ISR','IMSS','NETO'].map(h =>
+                                                React.createElement('th', { key:h, style:{ padding:'5px 7px', textAlign:h==='PERÍODO'?'left':'right', color:'#555', fontSize:9 } }, h)))),
+                                    React.createElement('tbody', null,
+                                        (e.cuts||[]).map((c,ci) =>
+                                            React.createElement('tr', { key:ci, style:{ borderBottom:'1px solid #1a1a2e' } },
+                                                React.createElement('td', { style:{ padding:'5px 7px', color:'#aaa' } }, c.period||c.date||c.cutId),
+                                                React.createElement('td', { style:{ padding:'5px 7px', textAlign:'right', color:'#fff' } }, fmtD(c.base||0)),
+                                                React.createElement('td', { style:{ padding:'5px 7px', textAlign:'right', color:'#ff6b6b' } }, fmtD(c.isr||0)),
+                                                React.createElement('td', { style:{ padding:'5px 7px', textAlign:'right', color:'#ffa94d' } }, fmtD(c.imss||0)),
+                                                React.createElement('td', { style:{ padding:'5px 7px', textAlign:'right', color:'#22c55e' } }, fmtD(c.net||0)))))))))),
+                React.createElement('tfoot', null,
+                    React.createElement('tr', { style:{ borderTop:'2px solid #334', background:'#12122a', fontWeight:900 } },
+                        React.createElement('td', { colSpan:3, style:{ padding:'10px 7px', color:'#fff', fontSize:11 } }, 'TOTAL — ' + empList.length + ' empleados'),
+                        React.createElement('td', { style:{ padding:'10px 7px', textAlign:'right', color:'#fff' } }, fmtD(empList.reduce((a,e)=>a+(e.grossTotal||0),0))),
+                        React.createElement('td', { style:{ padding:'10px 7px', textAlign:'right', color:'#ff6b6b' } }, fmtD(empList.reduce((a,e)=>a+(e.isrTotal||0),0))),
+                        React.createElement('td', { style:{ padding:'10px 7px', textAlign:'right', color:'#ffa94d' } }, fmtD(empList.reduce((a,e)=>a+(e.imssObrTotal||0),0))),
+                        React.createElement('td', { style:{ padding:'10px 7px', textAlign:'right', color:'#22c55e', fontSize:13 } }, fmtD(empList.reduce((a,e)=>a+(e.netTotal||0),0))),
+                                            React.createElement('td', null))))));
+
 
     return React.createElement('div', { style:{ padding:24, fontFamily:'monospace' } },
         // Header
@@ -6439,6 +6531,7 @@ const ViewPeriodosFiscales = ({ db }) => {
                     const empAccum = data.employeeAccum || {};
                     const empList = Object.values(empAccum);
                     const isSelected = selPeriod && selPeriod.id === p.id;
+                    const cutsInPeriod = getCutsInPeriod(p);
 
                     return React.createElement('div', { key:p.id, style:{ border:`2px solid ${isClosed?'#22c55e44':'#334'}`, borderRadius:8, overflow:'hidden' } },
                         // Period header
@@ -6448,22 +6541,73 @@ const ViewPeriodosFiscales = ({ db }) => {
                                 React.createElement('div', { style:{ fontSize:22 } }, isClosed ? '🔒' : '📂'),
                                 React.createElement('div', null,
                                     React.createElement('div', { style:{ fontSize:14, fontWeight:900, color:'#fff' } }, p.name),
-                                    React.createElement('div', { style:{ fontSize:11, color:'#888', marginTop:2 } },
-                                        p.date_start + ' → ' + p.date_end)),
-                                isClosed && React.createElement('div', { style:{ padding:'3px 10px', background:'#22c55e22', border:'1px solid #22c55e44', color:'#22c55e', fontSize:9, fontWeight:700, letterSpacing:'0.1em' } }, 'CERRADO'),
-                                !isClosed && React.createElement('div', { style:{ padding:'3px 10px', background:'#74c0fc22', border:'1px solid #74c0fc44', color:'#74c0fc', fontSize:9, fontWeight:700 } }, 'ABIERTO')),
+                                    React.createElement('div', { style:{ fontSize:11, color:'#888', marginTop:2 } }, p.date_start + ' → ' + p.date_end)),
+                                isClosed
+                                    ? React.createElement('div', { style:{ padding:'3px 10px', background:'#22c55e22', border:'1px solid #22c55e44', color:'#22c55e', fontSize:9, fontWeight:700 } }, '🔒 CERRADO')
+                                    : React.createElement('div', { style:{ padding:'3px 10px', background:'#74c0fc22', border:'1px solid #74c0fc44', color:'#74c0fc', fontSize:9, fontWeight:700 } }, '📂 ABIERTO')),
                             React.createElement('div', { style:{ display:'flex', gap:12, alignItems:'center' } },
-                                isClosed && React.createElement('div', { style:{ textAlign:'right', fontSize:10, color:'#888' } },
-                                    React.createElement('div', null, empList.length + ' empleados'),
-                                    React.createElement('div', null, data.totalCuts + ' cortes'),
-                                    React.createElement('div', { style:{ color:'#22c55e', fontWeight:700 } }, fmt(data.grandNet||0) + ' neto')),
+                                React.createElement('div', { style:{ textAlign:'right', fontSize:10, color:'#888' } },
+                                    React.createElement('div', null, (isClosed ? data.totalEmployees : cutsInPeriod.length > 0 ? new Set(cutsInPeriod.flatMap(c=>(c.empSnapshot||[]).map(s=>s.id))).size : 0) + ' empleados'),
+                                    React.createElement('div', null, (isClosed ? data.totalCuts : cutsInPeriod.length) + ' cortes'),
+                                    React.createElement('div', { style:{ color: isClosed?'#22c55e':'#74c0fc', fontWeight:700 } },
+                                        fmt(isClosed ? data.grandNet||0 : cutsInPeriod.reduce((a,c)=>(c.empSnapshot||[]).reduce((b,s)=>b+(s.net||0),a),0)) + ' neto')),
                                 !isClosed && React.createElement('button', { onClick: e => { e.stopPropagation(); handleClose(p); },
                                     disabled: closing === p.id,
                                     style:{ padding:'7px 14px', background:'#4a1a1a', border:'1px solid #ff6b6b44', color:'#ff6b6b', fontFamily:'monospace', fontSize:10, fontWeight:700, cursor:'pointer' } },
                                     closing === p.id ? '⏳ Cerrando...' : '🔒 CERRAR PERÍODO'))),
 
-                        // Detail — employee accumulation table
-                        isSelected && isClosed && empList.length > 0 && React.createElement('div', { style:{ padding:'0 18px 18px' } },
+                        // Detail — open period shows live cuts, closed shows frozen accum
+                        isSelected && React.createElement('div', { style:{ padding:'0 18px 18px', borderTop:'1px solid #334' } },
+                            React.createElement('div', { style:{ fontSize:10, color:'#666', marginBottom:12, paddingTop:12, letterSpacing:'0.08em' } },
+                                isClosed ? 'ACUMULADO POR EMPLEADO — PERÍODO CERRADO' : 'NÓMINAS EN ESTE PERÍODO — EN CURSO'),
+
+                            // For open periods: show each cut
+                            !isClosed && cutsInPeriod.length === 0 && React.createElement('div', { style:{ padding:20, textAlign:'center', color:'#666', fontSize:11 } },
+                                'No hay cortes de nómina en el rango ' + p.date_start + ' → ' + p.date_end),
+
+                            !isClosed && cutsInPeriod.length > 0 && React.createElement('div', null,
+                                // Summary KPIs
+                                React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:10, marginBottom:16 } },
+                                    [
+                                        { l:'CORTES', v: cutsInPeriod.length, c:'#74c0fc' },
+                                        { l:'BRUTO ACUM.', v: fmt(cutsInPeriod.reduce((a,c)=>(c.empSnapshot||[]).reduce((b,s)=>b+(s.base||0),a),0)), c:'#fff' },
+                                        { l:'ISR ACUM.',   v: fmt(cutsInPeriod.reduce((a,c)=>(c.empSnapshot||[]).reduce((b,s)=>b+Math.max(0,(s.deds&&s.deds['ISR Art. 96 LISR']||0)-(s.deds&&s.deds['Subsidio al Empleo']||0)),a),0)), c:'#ff6b6b' },
+                                        { l:'NETO ACUM.',  v: fmt(cutsInPeriod.reduce((a,c)=>(c.empSnapshot||[]).reduce((b,s)=>b+(s.net||0),a),0)), c:'#22c55e' },
+                                    ].map(k => React.createElement('div', { key:k.l, style:{ background:'#12122a', border:'1px solid #334', padding:'10px 12px' } },
+                                        React.createElement('div', { style:{ fontSize:9, color:'#555', marginBottom:3 } }, k.l),
+                                        React.createElement('div', { style:{ fontSize:14, fontWeight:900, color:k.c } }, k.v)))),
+
+                                // Cuts list
+                                React.createElement('div', { style:{ marginBottom:16 } },
+                                    cutsInPeriod.map((c, ci) => {
+                                        const snap = c.empSnapshot||[];
+                                        const gross = snap.reduce((a,s)=>a+(s.base||0),0);
+                                        const net   = snap.reduce((a,s)=>a+(s.net||0),0);
+                                        return React.createElement('div', { key:c.id, style:{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'8px 12px', marginBottom:4, background:'#0d0d1e', border:'1px solid #223' } },
+                                            React.createElement('div', null,
+                                                React.createElement('div', { style:{ color:'#fff', fontSize:11, fontWeight:700 } }, c.period||c.date||c.id),
+                                                React.createElement('div', { style:{ color:'#555', fontSize:9 } }, snap.length + ' empleados · status: ' + (c.status||'pendiente').toUpperCase())),
+                                            React.createElement('div', { style:{ textAlign:'right' } },
+                                                React.createElement('div', { style:{ color:'#fff', fontSize:11, fontWeight:700 } }, fmt(gross) + ' bruto'),
+                                                React.createElement('div', { style:{ color:'#22c55e', fontSize:11 } }, fmt(net) + ' neto')));
+                                    })),
+
+                                // Employee accumulation table
+                                React.createElement('div', { style:{ fontSize:10, color:'#888', marginBottom:8, fontWeight:700 } }, 'ACUMULADO POR EMPLEADO (período en curso)'),
+                                buildAccumTable(buildAccum(cutsInPeriod), detailEmp, setDetailEmp, fmtD, depts)),
+
+                            // Closed period: frozen accum
+                            isClosed && React.createElement('div', null,
+                                React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:10, marginBottom:16 } },
+                                    [
+                                        { l:'CORTES CONGELADOS', v: data.totalCuts||0,                   c:'#74c0fc' },
+                                        { l:'EMPLEADOS',          v: data.totalEmployees||0,              c:'#fff'    },
+                                        { l:'BRUTO TOTAL',        v: fmt(data.grandGross||0),             c:'#fff'    },
+                                        { l:'NETO TOTAL',         v: fmt(data.grandNet||0),               c:'#22c55e' },
+                                    ].map(k => React.createElement('div', { key:k.l, style:{ background:'#12122a', border:'1px solid #334', padding:'10px 12px' } },
+                                        React.createElement('div', { style:{ fontSize:9, color:'#555', marginBottom:3 } }, k.l),
+                                        React.createElement('div', { style:{ fontSize:14, fontWeight:900, color:k.c } }, k.v)))),
+                                buildAccumTable(Object.values(empAccum), detailEmp, setDetailEmp, fmtD, depts))));
                             React.createElement('div', { style:{ fontSize:10, color:'#666', marginBottom:12, paddingTop:12, borderTop:'1px solid #334', letterSpacing:'0.08em' } },
                                 'ACUMULADO POR EMPLEADO — ' + p.name),
                             React.createElement('div', { style:{ overflowX:'auto' } },
@@ -6511,7 +6655,8 @@ const ViewPeriodosFiscales = ({ db }) => {
                                             React.createElement('td', { style:{ padding:'10px 7px', textAlign:'right', color:'#ff6b6b' } }, fmtD(empList.reduce((a,e)=>a+e.isrTotal,0))),
                                             React.createElement('td', { style:{ padding:'10px 7px', textAlign:'right', color:'#ffa94d' } }, fmtD(empList.reduce((a,e)=>a+e.imssObrTotal,0))),
                                             React.createElement('td', { style:{ padding:'10px 7px', textAlign:'right', color:'#22c55e', fontSize:13 } }, fmtD(empList.reduce((a,e)=>a+e.netTotal,0))),
-                                            React.createElement('td', null)))))));
+                                            React.createElement('td', null)))));
+
 
                 })),
 
