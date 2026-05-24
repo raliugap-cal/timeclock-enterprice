@@ -6370,22 +6370,35 @@ const ViewReportesNomina = ({ db, updatePayrollCut }) => {
     const [filterDept, setFilterDept] = useState("all");
     const [filterCountry, setFilterCountry] = useState("all");
     const [searchEmp, setSearchEmp] = useState("");
-    const [authModal, setAuthModal] = useState(null); // {cut, step: "rrhh"|"director"}
     const [authNotes, setAuthNotes] = useState("");
 
-    const cuts = (db?.payrollCuts || []).sort((a,b) => new Date(b.date) - new Date(a.date));
-    const depts = (db?.departments || []);
-    const emps  = (db?.employees  || []);
-    const ytd   = db?.taxYtd || {};
+    if (!db) return React.createElement("div", { style: { padding: 40, textAlign: "center", color: DS.textDim, fontFamily: DS.sans } }, "Cargando...");
 
-    // ── Seleccionar corte automáticamente el más reciente pendiente ──
+    const cuts = (db.payrollCuts || []).sort((a,b) => new Date(b.date||0) - new Date(a.date||0));
+    const depts = (db.departments || []);
+    const emps  = (db.employees  || []);
+    const ytd   = db.taxYtd || {};
+
+    // Seleccionar corte automáticamente
     React.useEffect(() => {
         if (!selCut && cuts.length > 0) setSelCut(cuts[0]);
     }, [cuts.length]);
 
-    const cut = selCut || cuts[0];
-    if (!cut) return React.createElement("div", { style: { padding: 40, textAlign: "center", color: DS.textDim, fontFamily: DS.sans } },
-        "No hay cortes de nómina generados. Ve a Nómina → Nuevo Corte.");
+    if (cuts.length === 0) return React.createElement("div", { style: { padding: 40, textAlign: "center", color: DS.textDim, fontFamily: DS.sans } },
+        React.createElement("div", { style: { fontSize: 48, marginBottom: 16 } }, "📋"),
+        React.createElement("div", { style: { fontSize: 18, fontWeight: 700, color: DS.text, marginBottom: 8 } }, "Sin cortes de nómina"),
+        React.createElement("div", { style: { fontSize: 13, color: DS.textDim } }, "Ve a Nómina → Nuevo Corte para generar tu primer corte."));
+
+    // Cortes con empSnapshot válido
+    const cutsConSnap = cuts.filter(c => c.empSnapshot && c.empSnapshot.length > 0);
+    const cut = selCut && selCut.empSnapshot?.length > 0 ? selCut : cutsConSnap[0] || cuts[0];
+
+    if (!cut.empSnapshot || cut.empSnapshot.length === 0) return React.createElement("div", null,
+        React.createElement(SectionHeader, { icon: ClipboardList, label: "Reportes de Nómina" }),
+        React.createElement("div", { style: { padding: 40, textAlign: "center", color: DS.textDim, fontFamily: DS.sans } },
+            React.createElement("div", { style: { fontSize: 48, marginBottom: 16 } }, "⚠️"),
+            React.createElement("div", { style: { fontSize: 16, fontWeight: 700, color: DS.text, marginBottom: 8 } }, "Los cortes existentes no tienen detalle por empleado"),
+            React.createElement("div", { style: { fontSize: 13, color: DS.textDim } }, "Genera un nuevo corte desde Nómina para ver el reporte detallado.")));
 
     const snaps = (cut.empSnapshot || []).filter(s => {
         if (filterDept !== "all" && s.dept !== filterDept) return false;
