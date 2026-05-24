@@ -6359,6 +6359,401 @@ const ViewDepartments = ({ db, upsertDepartment, deleteDepartment }) => {
 // ═══════════════════════════════════════════════════════════════
 //  VISTA DE DISPERSIÓN MASIVA
 // ═══════════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════════════════
+//  REPORTES DE NÓMINA — RRHH · SAT · IMSS · GERENCIAL
+// ═══════════════════════════════════════════════════════════════════════
+const ViewReportesNomina = ({ db, updatePayrollCut }) => {
+    const { t } = useT();
+    const [tab, setTab] = useState("gerencial");
+    const [selCut, setSelCut] = useState(null);
+    const [filterDept, setFilterDept] = useState("all");
+    const [filterCountry, setFilterCountry] = useState("all");
+    const [searchEmp, setSearchEmp] = useState("");
+    const [authModal, setAuthModal] = useState(null); // {cut, step: "rrhh"|"director"}
+    const [authNotes, setAuthNotes] = useState("");
+
+    const cuts = (db?.payrollCuts || []).sort((a,b) => new Date(b.date) - new Date(a.date));
+    const depts = (db?.departments || []);
+    const emps  = (db?.employees  || []);
+    const ytd   = db?.taxYtd || {};
+
+    // ── Seleccionar corte automáticamente el más reciente pendiente ──
+    React.useEffect(() => {
+        if (!selCut && cuts.length > 0) setSelCut(cuts[0]);
+    }, [cuts.length]);
+
+    const cut = selCut || cuts[0];
+    if (!cut) return React.createElement("div", { style: { padding: 40, textAlign: "center", color: DS.textDim, fontFamily: DS.sans } },
+        "No hay cortes de nómina generados. Ve a Nómina → Nuevo Corte.");
+
+    const snaps = (cut.empSnapshot || []).filter(s => {
+        if (filterDept !== "all" && s.dept !== filterDept) return false;
+        if (filterCountry !== "all" && s.country !== filterCountry) return false;
+        if (searchEmp && !(s.name||"").toLowerCase().includes(searchEmp.toLowerCase())) return false;
+        return true;
+    });
+
+    // ── Totales del corte filtrado ──────────────────────────────────
+    const totGross  = snaps.reduce((s,e) => s + (e.calc?.base||0), 0);
+    const totISR    = snaps.reduce((s,e) => s + (e.calc?.isr||e.calc?.fedTax||0), 0);
+    const totIMSS   = snaps.reduce((s,e) => s + (e.calc?.imssOb||0), 0);
+    const totOtras  = snaps.reduce((s,e) => s + (e.calc?.totalDed||0) - (e.calc?.isr||e.calc?.fedTax||0) - (e.calc?.imssOb||0), 0);
+    const totNet    = snaps.reduce((s,e) => s + (e.calc?.net||0), 0);
+    const totPatron = snaps.reduce((s,e) => s + (e.calc?.imssPatron||e.calc?.socialTax||0), 0);
+
+    const fmt = (n) => "$" + Math.round(n||0).toLocaleString("es-MX");
+    const fmtD = (n) => (n||0).toLocaleString("es-MX", {minimumFractionDigits:2, maximumFractionDigits:2});
+
+    // ── Autorización ────────────────────────────────────────────────
+    const handleAuth = (step) => {
+        const now = new Date().toISOString();
+        const user = db?.systemUsers?.find(u => u.role === (step === "rrhh" ? "editor" : "admin"));
+        const updates = step === "rrhh"
+            ? { auth_rrhh: { by: user?.name || "RRHH", at: now, notes: authNotes }, status: "autorizado_rrhh" }
+            : { auth_director: { by: user?.name || "Director", at: now, notes: authNotes }, status: "autorizado" };
+        updatePayrollCut({ ...cut, ...updates });
+        setAuthModal(null); setAuthNotes("");
+    };
+
+    const TABS = [
+        { id: "gerencial", label: "REPORTE GERENCIAL", icon: BarChart3 },
+        { id: "imss",      label: "REPORTE IMSS",      icon: Shield    },
+        { id: "sat",       label: "REPORTE SAT",        icon: FileText  },
+        { id: "autorizacion", label: "AUTORIZACIÓN",    icon: CheckCircle },
+    ];
+
+    // ── Print helper ────────────────────────────────────────────────
+    const handlePrint = () => window.print();
+
+    return React.createElement("div", null,
+        React.createElement(SectionHeader, { icon: FileText, label: "Reportes de Nómina" }),
+
+        // ── Selector de corte ────────────────────────────────────────
+        React.createElement("div", { style: { display: "flex", gap: 12, alignItems: "center", marginBottom: 20, flexWrap: "wrap" } },
+            React.createElement("div", { style: { fontFamily: DS.mono, fontSize: 10, color: DS.textDim, whiteSpace: "nowrap" } }, "CORTE:"),
+            React.createElement("select", {
+                value: selCut?.id || "",
+                onChange: e => setSelCut(cuts.find(c => c.id === e.target.value)),
+                style: { flex: 1, maxWidth: 380, padding: "8px 12px", background: DS.bgAlt, border: `1px solid ${DS.border}`, color: DS.text, fontFamily: DS.mono, fontSize: 11 }
+            }, cuts.map(c => React.createElement("option", { key: c.id, value: c.id },
+                `${c.period} — ${(c.type||"").toUpperCase()} — ${c.employees||0} emp — ${
+                    c.status === "autorizado" ? "✓ AUTORIZADO" :
+                    c.status === "autorizado_rrhh" ? "⏳ PEND. DIRECTOR" :
+                    c.status === "dispersado" ? "💳 DISPERSADO" : "📋 PENDIENTE"}`
+            ))),
+            React.createElement("div", { style: { padding: "6px 14px", borderRadius: 4, fontFamily: DS.mono, fontSize: 10, fontWeight: 700,
+                background: cut.status === "autorizado" ? `${DS.glowGreen}15` : cut.status === "autorizado_rrhh" ? `${DS.glowAmber}15` : `${DS.glow}15`,
+                color: cut.status === "autorizado" ? DS.glowGreen : cut.status === "autorizado_rrhh" ? DS.glowAmber : DS.glow,
+                border: `1px solid ${cut.status === "autorizado" ? DS.glowGreen : cut.status === "autorizado_rrhh" ? DS.glowAmber : DS.glow}44` } },
+                cut.status === "autorizado" ? "✓ AUTORIZADO" :
+                cut.status === "autorizado_rrhh" ? "⏳ PENDIENTE DIRECTOR" :
+                cut.status === "dispersado" ? "💳 DISPERSADO" : "📋 PENDIENTE")),
+
+        // ── KPIs del corte ───────────────────────────────────────────
+        React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(6,1fr)", gap: 10, marginBottom: 20 } },
+            ...[
+                { l: "PERÍODO",          v: cut.period,                          c: DS.text,       sm: true },
+                { l: "EMPLEADOS",        v: snaps.length + " / " + (cut.employees||0), c: DS.glow  },
+                { l: "BRUTO TOTAL",      v: fmt(totGross),                       c: DS.text        },
+                { l: "ISR RETENIDO",     v: fmt(totISR),                         c: DS.glowRed     },
+                { l: "IMSS OBRERO",      v: fmt(totIMSS),                        c: DS.glowAmber   },
+                { l: "NETO A DISPERSAR", v: fmt(totNet),                         c: DS.glowGreen   },
+            ].map(k => React.createElement(Panel, { key: k.l, glowColor: k.c },
+                React.createElement("div", { style: { fontFamily: DS.mono, fontSize: 8, color: DS.textDim, marginBottom: 4 } }, k.l),
+                React.createElement("div", { style: { fontFamily: DS.mono, fontSize: k.sm ? 11 : 14, fontWeight: 900, color: k.c } }, k.v)))),
+
+        // ── Tabs ─────────────────────────────────────────────────────
+        React.createElement("div", { style: { display: "flex", gap: 4, marginBottom: 16, borderBottom: `1px solid ${DS.border}`, paddingBottom: 0 } },
+            TABS.map(t => React.createElement("button", { key: t.id, onClick: () => setTab(t.id),
+                style: { display: "flex", alignItems: "center", gap: 6, padding: "8px 16px",
+                    borderBottom: tab === t.id ? `2px solid ${DS.glow}` : "2px solid transparent",
+                    background: "transparent", border: "none", borderBottom: tab === t.id ? `2px solid ${DS.glow}` : "2px solid transparent",
+                    color: tab === t.id ? DS.glow : DS.textDim, fontFamily: DS.mono, fontSize: 10, fontWeight: 700, cursor: "pointer" } },
+                React.createElement(t.icon, { size: 12 }), t.label))),
+
+        // ════════════════════════════════════════════════════════════
+        //  TAB: REPORTE GERENCIAL
+        // ════════════════════════════════════════════════════════════
+        tab === "gerencial" && React.createElement("div", null,
+
+            // Filtros
+            React.createElement("div", { style: { display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center" } },
+                React.createElement("input", { placeholder: "Buscar empleado...", value: searchEmp, onChange: e => setSearchEmp(e.target.value),
+                    style: { padding: "7px 12px", background: DS.bgAlt, border: `1px solid ${DS.border}`, color: DS.text, fontFamily: DS.sans, fontSize: 12, flex: 1, maxWidth: 220 } }),
+                React.createElement("select", { value: filterDept, onChange: e => setFilterDept(e.target.value),
+                    style: { padding: "7px 10px", background: DS.bgAlt, border: `1px solid ${DS.border}`, color: DS.text, fontFamily: DS.mono, fontSize: 10 } },
+                    React.createElement("option", { value: "all" }, "TODOS LOS DEPARTAMENTOS"),
+                    depts.map(d => React.createElement("option", { key: d.id, value: d.id }, d.name))),
+                React.createElement("select", { value: filterCountry, onChange: e => setFilterCountry(e.target.value),
+                    style: { padding: "7px 10px", background: DS.bgAlt, border: `1px solid ${DS.border}`, color: DS.text, fontFamily: DS.mono, fontSize: 10 } },
+                    React.createElement("option", { value: "all" }, "TODOS LOS PAÍSES"),
+                    ["MX","US","RD","SV"].map(c => React.createElement("option", { key: c, value: c }, c))),
+                React.createElement("button", { onClick: handlePrint,
+                    style: { display: "flex", alignItems: "center", gap: 6, padding: "7px 16px", background: `${DS.glowPurple}18`, border: `1px solid ${DS.glowPurple}55`, color: DS.glowPurple, fontFamily: DS.mono, fontSize: 10, fontWeight: 700, cursor: "pointer" } },
+                    React.createElement(FileText, { size: 12 }), "IMPRIMIR / PDF")),
+
+            // Tabla detallada
+            React.createElement("div", { style: { overflowX: "auto" } },
+                React.createElement("table", { style: { width: "100%", borderCollapse: "collapse", fontFamily: DS.mono, fontSize: 11 } },
+                    // Header
+                    React.createElement("thead", null,
+                        React.createElement("tr", { style: { background: DS.bgAlt, borderBottom: `2px solid ${DS.border}` } },
+                            ...[
+                                ["#","40px"],["EMPLEADO","180px"],["DEPTO","120px"],["PAÍS","50px"],
+                                ["PERÍODO","90px"],["DÍAS","55px"],["BRUTO","100px"],
+                                ["ISR","90px"],["IMSS OB.","90px"],["OTRAS DED.","90px"],
+                                ["NETO","100px"],["ACUM. ISR","90px"],["ACUM. BRUTO","100px"],["STATUS","80px"],
+                            ].map(([h,w]) => React.createElement("th", { key: h, style: { padding: "8px 6px", textAlign: h==="EMPLEADO"||h==="DEPTO"?"left":"right", color: DS.textDim, fontSize: 9, letterSpacing: "0.08em", width: w, whiteSpace: "nowrap" } }, h)))),
+                    // Rows
+                    React.createElement("tbody", null,
+                        snaps.map((s, idx) => {
+                            const calc = s.calc || {};
+                            const dept = depts.find(d => d.id === s.dept);
+                            const empYtd = ytd[s.id] || {};
+                            const isr = calc.isr || calc.fedTax || 0;
+                            const imssOb = calc.imssOb || 0;
+                            const otrasD = (calc.totalDed||0) - isr - imssOb;
+                            const isError = !calc.net || calc.net <= 0;
+                            return React.createElement("tr", { key: s.id, style: {
+                                borderBottom: `1px solid ${DS.border}`,
+                                background: isError ? `${DS.glowRed}08` : idx%2===0 ? "transparent" : `${DS.glow}03`
+                            } },
+                                React.createElement("td", { style: { padding: "7px 6px", color: DS.textDim, textAlign: "right" } }, idx+1),
+                                React.createElement("td", { style: { padding: "7px 6px" } },
+                                    React.createElement("div", { style: { color: DS.text, fontWeight: 700 } }, s.name),
+                                    React.createElement("div", { style: { fontSize: 9, color: DS.textDim } }, s.id)),
+                                React.createElement("td", { style: { padding: "7px 6px", color: DS.textDim, fontSize: 10 } }, dept?.name || "—"),
+                                React.createElement("td", { style: { padding: "7px 6px", textAlign: "center" } },
+                                    React.createElement("span", null, { MX:"🇲🇽",US:"🇺🇸",RD:"🇩🇴",SV:"🇸🇻" }[s.country]||s.country)),
+                                React.createElement("td", { style: { padding: "7px 6px", textAlign: "right", color: DS.textDim, fontSize: 9 } },
+                                    React.createElement("div", null, cut.type?.toUpperCase()),
+                                    React.createElement("div", null, cut.period?.split(" al ")[0] || cut.date)),
+                                React.createElement("td", { style: { padding: "7px 6px", textAlign: "right", color: DS.text } },
+                                    s.calc?.periodDays || "—"),
+                                React.createElement("td", { style: { padding: "7px 6px", textAlign: "right", color: DS.text, fontWeight: 700 } },
+                                    fmtD(calc.base)),
+                                React.createElement("td", { style: { padding: "7px 6px", textAlign: "right", color: DS.glowRed } },
+                                    fmtD(isr)),
+                                React.createElement("td", { style: { padding: "7px 6px", textAlign: "right", color: DS.glowAmber } },
+                                    fmtD(imssOb)),
+                                React.createElement("td", { style: { padding: "7px 6px", textAlign: "right", color: DS.textDim } },
+                                    fmtD(Math.max(0, otrasD))),
+                                React.createElement("td", { style: { padding: "7px 6px", textAlign: "right", color: DS.glowGreen, fontWeight: 900 } },
+                                    fmtD(calc.net)),
+                                React.createElement("td", { style: { padding: "7px 6px", textAlign: "right", color: DS.textDim, fontSize: 10 } },
+                                    fmtD(empYtd.isr || 0)),
+                                React.createElement("td", { style: { padding: "7px 6px", textAlign: "right", color: DS.textDim, fontSize: 10 } },
+                                    fmtD(empYtd.gross || 0)),
+                                React.createElement("td", { style: { padding: "7px 6px", textAlign: "center" } },
+                                    isError
+                                        ? React.createElement("span", { style: { color: DS.glowRed, fontSize: 9, fontWeight: 700 } }, "⚠ ERROR")
+                                        : React.createElement("span", { style: { color: DS.glowGreen, fontSize: 9 } }, "✓ OK")));
+                        }),
+                        // Totales
+                        React.createElement("tr", { style: { borderTop: `2px solid ${DS.border}`, background: DS.bgAlt } },
+                            React.createElement("td", { colSpan: 6, style: { padding: "8px 6px", fontFamily: DS.mono, fontSize: 10, fontWeight: 700, color: DS.text } }, `TOTALES (${snaps.length} empleados)`),
+                            React.createElement("td", { style: { padding: "8px 6px", textAlign: "right", fontWeight: 900, color: DS.text } }, fmtD(totGross)),
+                            React.createElement("td", { style: { padding: "8px 6px", textAlign: "right", fontWeight: 900, color: DS.glowRed } }, fmtD(totISR)),
+                            React.createElement("td", { style: { padding: "8px 6px", textAlign: "right", fontWeight: 900, color: DS.glowAmber } }, fmtD(totIMSS)),
+                            React.createElement("td", { style: { padding: "8px 6px", textAlign: "right", fontWeight: 900, color: DS.textDim } }, fmtD(Math.max(0,totOtras))),
+                            React.createElement("td", { style: { padding: "8px 6px", textAlign: "right", fontWeight: 900, color: DS.glowGreen } }, fmtD(totNet)),
+                            React.createElement("td", { colSpan: 3 }))))))),
+
+        // ════════════════════════════════════════════════════════════
+        //  TAB: REPORTE IMSS
+        // ════════════════════════════════════════════════════════════
+        tab === "imss" && React.createElement("div", null,
+            React.createElement("div", { style: { marginBottom: 16, padding: "12px 16px", background: `${DS.glowAmber}08`, border: `1px solid ${DS.glowAmber}33`, display: "flex", gap: 12, alignItems: "center" } },
+                React.createElement(Shield, { size: 14, color: DS.glowAmber }),
+                React.createElement("div", null,
+                    React.createElement("div", { style: { fontFamily: DS.sans, fontSize: 12, fontWeight: 700, color: DS.glowAmber } }, "Cuotas IMSS — Período: " + cut.period),
+                    React.createElement("div", { style: { fontFamily: DS.mono, fontSize: 10, color: DS.textDim } }, "Base: Art. 25 LSS · Cuotas vigentes 2026 · Solo aplica a empleados MX"))),
+            React.createElement("div", { style: { overflowX: "auto" } },
+                React.createElement("table", { style: { width: "100%", borderCollapse: "collapse", fontFamily: DS.mono, fontSize: 11 } },
+                    React.createElement("thead", null,
+                        React.createElement("tr", { style: { background: DS.bgAlt } },
+                            ...[["#","40"],["EMPLEADO","180"],["NSS","120"],["SDI DIARIO","100"],["SDI MENSUAL","100"],
+                                ["ENFER.OB","90"],["RET.OB","90"],["INV.OB","90"],["TOTAL OB.","100"],
+                                ["ENFER.PAT","90"],["RIESGO","90"],["INFONAVIT","90"],["TOTAL PAT","100"],
+                            ].map(([h,w]) => React.createElement("th", { key: h, style: { padding: "7px 5px", textAlign: h==="EMPLEADO"?"left":"right", color: DS.textDim, fontSize: 8, letterSpacing: "0.08em", width: w+"px", whiteSpace: "nowrap" } }, h)))),
+                    React.createElement("tbody", null,
+                        snaps.filter(s => s.country === "MX").map((s, idx) => {
+                            const calc = s.calc || {};
+                            const sdi = calc.sdi || r2(((s.salary||0)*12/365));
+                            const sdiM = r2(sdi * 30.4);
+                            const obEnf   = r2(sdiM * 0.00315);
+                            const obRet   = r2(sdiM * 0.01125);
+                            const obInv   = r2(sdiM * 0.00625);
+                            const totOb   = r2(obEnf + obRet + obInv);
+                            const patEnf  = r2(sdiM * 0.01050);
+                            const riesgo  = r2(sdiM * 0.00543);
+                            const infonav = r2(sdiM * 0.05);
+                            const totPat  = r2(patEnf + riesgo + infonav);
+                            const nss = s.nss || s.imss || "—";
+                            return React.createElement("tr", { key: s.id, style: { borderBottom: `1px solid ${DS.border}`, background: idx%2===0?"transparent":`${DS.glow}03` } },
+                                React.createElement("td", { style: { padding: "6px 5px", color: DS.textDim, textAlign: "right" } }, idx+1),
+                                React.createElement("td", { style: { padding: "6px 5px" } },
+                                    React.createElement("div", { style: { color: DS.text, fontWeight: 600 } }, s.name),
+                                    React.createElement("div", { style: { fontSize: 9, color: DS.textDim } }, s.id)),
+                                React.createElement("td", { style: { padding: "6px 5px", textAlign: "right", color: DS.textDim } }, nss),
+                                React.createElement("td", { style: { padding: "6px 5px", textAlign: "right" } }, fmtD(sdi)),
+                                React.createElement("td", { style: { padding: "6px 5px", textAlign: "right" } }, fmtD(sdiM)),
+                                React.createElement("td", { style: { padding: "6px 5px", textAlign: "right", color: DS.glowRed } }, fmtD(obEnf)),
+                                React.createElement("td", { style: { padding: "6px 5px", textAlign: "right", color: DS.glowRed } }, fmtD(obRet)),
+                                React.createElement("td", { style: { padding: "6px 5px", textAlign: "right", color: DS.glowRed } }, fmtD(obInv)),
+                                React.createElement("td", { style: { padding: "6px 5px", textAlign: "right", color: DS.glowRed, fontWeight: 700 } }, fmtD(totOb)),
+                                React.createElement("td", { style: { padding: "6px 5px", textAlign: "right", color: DS.glowAmber } }, fmtD(patEnf)),
+                                React.createElement("td", { style: { padding: "6px 5px", textAlign: "right", color: DS.glowAmber } }, fmtD(riesgo)),
+                                React.createElement("td", { style: { padding: "6px 5px", textAlign: "right", color: DS.glowAmber } }, fmtD(infonav)),
+                                React.createElement("td", { style: { padding: "6px 5px", textAlign: "right", color: DS.glowAmber, fontWeight: 700 } }, fmtD(totPat)));
+                        }),
+                        // Layout SUA
+                        React.createElement("tr", { style: { borderTop: `2px solid ${DS.border}`, background: DS.bgAlt } },
+                            React.createElement("td", { colSpan: 8, style: { padding: "8px 6px", fontFamily: DS.mono, fontSize: 10, fontWeight: 700, color: DS.text } },
+                                "TOTALES IMSS — " + snaps.filter(s=>s.country==="MX").length + " trabajadores MX"),
+                            React.createElement("td", { style: { padding: "8px 6px", textAlign: "right", fontWeight: 900, color: DS.glowRed } },
+                                fmtD(snaps.filter(s=>s.country==="MX").reduce((a,s)=>{
+                                    const c=s.calc||{}; const sdiM=r2((c.sdi||(s.salary||0)*12/365)*30.4);
+                                    return a+r2(sdiM*0.0025);}, 0))),
+                            React.createElement("td", { colSpan: 3, style: { padding: "8px 6px", textAlign: "right", fontWeight: 900, color: DS.glowAmber } },
+                                "Cuota patronal total: " + fmtD(snaps.filter(s=>s.country==="MX").reduce((a,s)=>{
+                                    const sdiM=r2(((s.calc?.sdi||(s.salary||0)*12/365))*30.4);
+                                    return a+r2(sdiM*0.06593);},0))),
+                            React.createElement("td", null))))),
+            // Export SUA note
+            React.createElement("div", { style: { marginTop: 12, padding: "10px 14px", background: `${DS.glow}06`, border: `1px solid ${DS.glow}22`, fontFamily: DS.mono, fontSize: 9, color: DS.textDim } },
+                "📋 Para el SUA: usa este reporte para capturar manualmente o exportar a CSV. El módulo de timbrado SUA estará disponible en una próxima versión.")),
+
+        // ════════════════════════════════════════════════════════════
+        //  TAB: REPORTE SAT
+        // ════════════════════════════════════════════════════════════
+        tab === "sat" && React.createElement("div", null,
+            React.createElement("div", { style: { marginBottom: 16, padding: "12px 16px", background: `${DS.glowRed}08`, border: `1px solid ${DS.glowRed}33`, display: "flex", gap: 12, alignItems: "center" } },
+                React.createElement(FileText, { size: 14, color: DS.glowRed }),
+                React.createElement("div", null,
+                    React.createElement("div", { style: { fontFamily: DS.sans, fontSize: 12, fontWeight: 700, color: DS.glowRed } }, "Retenciones ISR — Período: " + cut.period),
+                    React.createElement("div", { style: { fontFamily: DS.mono, fontSize: 10, color: DS.textDim } }, "Art. 96 LISR · Tabla ISR 2026 (Anexo 8 RMF 2026, DOF 28/12/2025) · CFDI Nómina en desarrollo"))),
+            React.createElement("div", { style: { overflowX: "auto" } },
+                React.createElement("table", { style: { width: "100%", borderCollapse: "collapse", fontFamily: DS.mono, fontSize: 11 } },
+                    React.createElement("thead", null,
+                        React.createElement("tr", { style: { background: DS.bgAlt } },
+                            ...[["#","40"],["EMPLEADO","180"],["RFC","120"],["CURP","130"],
+                                ["TOTAL PERCEPCIONES","130"],["PERCEPCIONES EXENTAS","130"],
+                                ["PERCEPCIONES GRAVADAS","130"],["ISR RETENIDO","110"],
+                                ["SUBSIDIO EMPLEO","110"],["ISR NETO","110"],
+                                ["IMSS OBRERO","100"],["NETO PAGADO","110"],
+                            ].map(([h,w]) => React.createElement("th", { key: h, style: { padding: "7px 5px", textAlign: h==="EMPLEADO"?"left":"right", color: DS.textDim, fontSize: 8, letterSpacing: "0.06em", width: w+"px", whiteSpace: "nowrap" } }, h)))),
+                    React.createElement("tbody", null,
+                        snaps.filter(s => s.country === "MX").map((s, idx) => {
+                            const calc = s.calc || {};
+                            const emp = emps.find(e => e.id === s.id) || {};
+                            const percTotal  = calc.base || 0;
+                            const percExenta = r2(percTotal * 0); // simplificado — extender con reglas de exención
+                            const percGrav   = r2(percTotal - percExenta);
+                            const isrBruto   = calc.isr || 0;
+                            const subsidio   = calc.subsidio || 0;
+                            const isrNeto    = r2(isrBruto - subsidio);
+                            const imssOb     = calc.imssOb || 0;
+                            return React.createElement("tr", { key: s.id, style: { borderBottom: `1px solid ${DS.border}`, background: idx%2===0?"transparent":`${DS.glow}03` } },
+                                React.createElement("td", { style: { padding: "6px 5px", color: DS.textDim, textAlign: "right" } }, idx+1),
+                                React.createElement("td", { style: { padding: "6px 5px" } },
+                                    React.createElement("div", { style: { color: DS.text, fontWeight: 600 } }, s.name),
+                                    React.createElement("div", { style: { fontSize: 9, color: DS.textDim } }, emp.rfc || "SIN RFC")),
+                                React.createElement("td", { style: { padding: "6px 5px", color: DS.textDim, fontSize: 10 } }, emp.rfc || "—"),
+                                React.createElement("td", { style: { padding: "6px 5px", color: DS.textDim, fontSize: 10 } }, emp.curp || "—"),
+                                React.createElement("td", { style: { padding: "6px 5px", textAlign: "right" } }, fmtD(percTotal)),
+                                React.createElement("td", { style: { padding: "6px 5px", textAlign: "right", color: DS.glowGreen } }, fmtD(percExenta)),
+                                React.createElement("td", { style: { padding: "6px 5px", textAlign: "right" } }, fmtD(percGrav)),
+                                React.createElement("td", { style: { padding: "6px 5px", textAlign: "right", color: DS.glowRed } }, fmtD(isrBruto)),
+                                React.createElement("td", { style: { padding: "6px 5px", textAlign: "right", color: DS.glowGreen } }, fmtD(subsidio)),
+                                React.createElement("td", { style: { padding: "6px 5px", textAlign: "right", color: DS.glowRed, fontWeight: 700 } }, fmtD(isrNeto)),
+                                React.createElement("td", { style: { padding: "6px 5px", textAlign: "right", color: DS.glowAmber } }, fmtD(imssOb)),
+                                React.createElement("td", { style: { padding: "6px 5px", textAlign: "right", color: DS.glowGreen, fontWeight: 700 } }, fmtD(calc.net)));
+                        }),
+                        // Totales SAT
+                        React.createElement("tr", { style: { borderTop: `2px solid ${DS.border}`, background: DS.bgAlt } },
+                            React.createElement("td", { colSpan: 4, style: { padding: "8px 5px", fontFamily: DS.mono, fontSize: 10, fontWeight: 700, color: DS.text } },
+                                "TOTALES — " + snaps.filter(s=>s.country==="MX").length + " trabajadores MX"),
+                            React.createElement("td", { style: { padding: "8px 5px", textAlign: "right", fontWeight: 900 } },
+                                fmtD(snaps.filter(s=>s.country==="MX").reduce((a,s)=>a+(s.calc?.base||0),0))),
+                            React.createElement("td", { style: { padding: "8px 5px", textAlign: "right", fontWeight: 900, color: DS.glowGreen } }, "$0.00"),
+                            React.createElement("td", { style: { padding: "8px 5px", textAlign: "right", fontWeight: 900 } },
+                                fmtD(snaps.filter(s=>s.country==="MX").reduce((a,s)=>a+(s.calc?.base||0),0))),
+                            React.createElement("td", { style: { padding: "8px 5px", textAlign: "right", fontWeight: 900, color: DS.glowRed } }, fmtD(totISR)),
+                            React.createElement("td", { style: { padding: "8px 5px", textAlign: "right", fontWeight: 900, color: DS.glowGreen } },
+                                fmtD(snaps.filter(s=>s.country==="MX").reduce((a,s)=>a+(s.calc?.subsidio||0),0))),
+                            React.createElement("td", { style: { padding: "8px 5px", textAlign: "right", fontWeight: 900, color: DS.glowRed } },
+                                fmtD(snaps.filter(s=>s.country==="MX").reduce((a,s)=>a+r2((s.calc?.isr||0)-(s.calc?.subsidio||0)),0))),
+                            React.createElement("td", { style: { padding: "8px 5px", textAlign: "right", fontWeight: 900, color: DS.glowAmber } }, fmtD(totIMSS)),
+                            React.createElement("td", { style: { padding: "8px 5px", textAlign: "right", fontWeight: 900, color: DS.glowGreen } }, fmtD(totNet)))))),
+            React.createElement("div", { style: { marginTop: 12, padding: "10px 14px", background: `${DS.glow}06`, border: `1px solid ${DS.glow}22`, fontFamily: DS.mono, fontSize: 9, color: DS.textDim } },
+                "📋 CFDI de Nómina (timbrado) estará disponible en el módulo de Timbrado SAT. Para el DIM/DIOT usa este reporte como base.")),
+
+        // ════════════════════════════════════════════════════════════
+        //  TAB: AUTORIZACIÓN
+        // ════════════════════════════════════════════════════════════
+        tab === "autorizacion" && React.createElement("div", null,
+            // Firma RRHH
+            React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 } },
+                // RRHH
+                React.createElement(Panel, { glowColor: cut.auth_rrhh ? DS.glowGreen : DS.glowAmber },
+                    React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10, marginBottom: 12 } },
+                        React.createElement("div", { style: { width: 36, height: 36, borderRadius: "50%", background: cut.auth_rrhh ? `${DS.glowGreen}20` : `${DS.glowAmber}20`, display: "flex", alignItems: "center", justifyContent: "center" } },
+                            cut.auth_rrhh ? React.createElement(CheckCircle, { size: 18, color: DS.glowGreen }) : React.createElement(Clock, { size: 18, color: DS.glowAmber })),
+                        React.createElement("div", null,
+                            React.createElement("div", { style: { fontFamily: DS.sans, fontSize: 14, fontWeight: 800, color: DS.text } }, "1. Revisión RRHH"),
+                            React.createElement("div", { style: { fontFamily: DS.mono, fontSize: 10, color: DS.textDim } }, "Verificación de datos y cálculos"))),
+                    cut.auth_rrhh
+                        ? React.createElement("div", { style: { padding: "10px 14px", background: `${DS.glowGreen}10`, border: `1px solid ${DS.glowGreen}33` } },
+                            React.createElement("div", { style: { fontFamily: DS.sans, fontSize: 12, color: DS.glowGreen, fontWeight: 700 } }, "✓ APROBADO por: " + cut.auth_rrhh.by),
+                            React.createElement("div", { style: { fontFamily: DS.mono, fontSize: 10, color: DS.textDim } }, new Date(cut.auth_rrhh.at).toLocaleString("es-MX")),
+                            cut.auth_rrhh.notes && React.createElement("div", { style: { fontFamily: DS.sans, fontSize: 11, color: DS.textDim, marginTop: 4, fontStyle: "italic" } }, '"' + cut.auth_rrhh.notes + '"'))
+                        : React.createElement("div", null,
+                            React.createElement("textarea", { placeholder: "Notas de revisión (opcional)...", rows: 3,
+                                style: { width: "100%", padding: "8px 10px", background: DS.bg, border: `1px solid ${DS.border}`, color: DS.text, fontFamily: DS.sans, fontSize: 12, resize: "vertical", boxSizing: "border-box", marginBottom: 10 } }),
+                            React.createElement("button", { onClick: () => handleAuth("rrhh"),
+                                style: { width: "100%", padding: "10px", background: `${DS.glowAmber}18`, border: `1px solid ${DS.glowAmber}55`, color: DS.glowAmber, fontFamily: DS.mono, fontSize: 11, fontWeight: 700, cursor: "pointer" } },
+                                "✓ APROBAR COMO RRHH"))),
+                // Director
+                React.createElement(Panel, { glowColor: cut.auth_director ? DS.glowGreen : cut.auth_rrhh ? DS.glow : DS.border },
+                    React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 10, marginBottom: 12 } },
+                        React.createElement("div", { style: { width: 36, height: 36, borderRadius: "50%", background: cut.auth_director ? `${DS.glowGreen}20` : `${DS.glow}20`, display: "flex", alignItems: "center", justifyContent: "center" } },
+                            cut.auth_director ? React.createElement(CheckCircle, { size: 18, color: DS.glowGreen }) : React.createElement(Shield, { size: 18, color: cut.auth_rrhh ? DS.glow : DS.textDim })),
+                        React.createElement("div", null,
+                            React.createElement("div", { style: { fontFamily: DS.sans, fontSize: 14, fontWeight: 800, color: cut.auth_rrhh ? DS.text : DS.textDim } }, "2. Autorización Director / Contador"),
+                            React.createElement("div", { style: { fontFamily: DS.mono, fontSize: 10, color: DS.textDim } }, "Autorización final para dispersión"))),
+                    cut.auth_director
+                        ? React.createElement("div", { style: { padding: "10px 14px", background: `${DS.glowGreen}10`, border: `1px solid ${DS.glowGreen}33` } },
+                            React.createElement("div", { style: { fontFamily: DS.sans, fontSize: 12, color: DS.glowGreen, fontWeight: 700 } }, "✓ AUTORIZADO por: " + cut.auth_director.by),
+                            React.createElement("div", { style: { fontFamily: DS.mono, fontSize: 10, color: DS.textDim } }, new Date(cut.auth_director.at).toLocaleString("es-MX")),
+                            cut.auth_director.notes && React.createElement("div", { style: { fontFamily: DS.sans, fontSize: 11, color: DS.textDim, marginTop: 4, fontStyle: "italic" } }, '"' + cut.auth_director.notes + '"'))
+                        : !cut.auth_rrhh
+                            ? React.createElement("div", { style: { padding: "20px", textAlign: "center", fontFamily: DS.mono, fontSize: 10, color: DS.textDim } }, "⏳ Requiere aprobación de RRHH primero")
+                            : React.createElement("div", null,
+                                React.createElement("textarea", { placeholder: "Notas de autorización (opcional)...", rows: 3,
+                                    style: { width: "100%", padding: "8px 10px", background: DS.bg, border: `1px solid ${DS.border}`, color: DS.text, fontFamily: DS.sans, fontSize: 12, resize: "vertical", boxSizing: "border-box", marginBottom: 10 } }),
+                                React.createElement("button", { onClick: () => handleAuth("director"),
+                                    style: { width: "100%", padding: "10px", background: `${DS.glow}18`, border: `1px solid ${DS.glow}55`, color: DS.glow, fontFamily: DS.mono, fontSize: 11, fontWeight: 700, cursor: "pointer" } },
+                                    "✓ AUTORIZAR PARA DISPERSIÓN")))),
+            // Resumen de autorización
+            React.createElement(Panel, { glowColor: DS.textDim },
+                React.createElement("div", { style: { fontFamily: DS.mono, fontSize: 9, color: DS.textDim, marginBottom: 12, letterSpacing: "0.1em" } }, "RESUMEN DEL CORTE PARA AUTORIZACIÓN"),
+                React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 12 } },
+                    ...[
+                        { l: "PERÍODO",     v: cut.period,          c: DS.text    },
+                        { l: "EMPLEADOS",   v: cut.employees || 0,  c: DS.glow    },
+                        { l: "BRUTO TOTAL", v: fmt(cut.grossTotal),  c: DS.text    },
+                        { l: "TOTAL ISR",   v: fmt(totISR),          c: DS.glowRed },
+                        { l: "TOTAL IMSS",  v: fmt(totIMSS),         c: DS.glowAmber },
+                        { l: "NETO A PAGAR",v: fmt(cut.netTotal),    c: DS.glowGreen },
+                        { l: "CUOTA PATRONAL", v: fmt(totPatron),    c: DS.glowAmber },
+                        { l: "COSTO TOTAL EMPRESA", v: fmt((cut.grossTotal||0)+(totPatron||0)), c: DS.glow },
+                    ].map(k => React.createElement("div", { key: k.l },
+                        React.createElement("div", { style: { fontFamily: DS.mono, fontSize: 8, color: DS.textDim } }, k.l),
+                        React.createElement("div", { style: { fontFamily: DS.mono, fontSize: 14, fontWeight: 900, color: k.c } }, k.v))))));
+};
+
 const ViewDispersion = ({ db, upsertEmployee, updatePayrollCut }) => {
     const { t } = useT();
     const [filterPayroll, setFilterPayroll] = useState("all");
@@ -8451,7 +8846,8 @@ const getAllModules = (t) => [
     { id: "payroll", label: t("nav_payroll"), icon: DollarSign, group: "admin", desc: "Generación y aprobación de cortes" },
     { id: "calculadora", label: t("nav_calculadora"), icon: Calculator, group: "admin", desc: "Simulador fiscal por empleado" },
     { id: "dispersion", label: t("nav_dispersion"), icon: Zap, group: "admin", desc: "Pago bancario y verificación CLABE" },
-    { id: "reports", label: t("nav_reports"), icon: BarChart3, group: "admin", desc: t("perm_bi_advanced") },
+    { id: "reportes",   label: "REPORTES",          icon: ClipboardList, group: "admin", desc: "IMSS · SAT · Gerencial · Autorización" },
+    { id: "reports",    label: t("nav_reports"),    icon: BarChart3, group: "admin", desc: t("perm_bi_advanced") },
     { id: "permisos", label: t("nav_permisos"), icon: Shield, group: "admin", desc: "Este módulo — gestión de roles y acceso" },
     // Portal empleado
     { id: "portal_clock", label: "Checar Entrada/Salida", icon: Clock, group: "employee", desc: t("perm_portal_clock") },
@@ -9256,7 +9652,7 @@ const TRANSLATIONS = {
         // Nav
         nav_dashboard: "Dashboard", nav_departments: "Departamentos", nav_employees: "Empleados",
         nav_time: "Control de Tiempo", nav_locations: "Geocercas", nav_payroll: "Nómina",
-        nav_calculadora: "Calculadora", nav_dispersion: "Dispersión", nav_reports: "Reportes BI",
+        nav_calculadora: "Calculadora", nav_dispersion: "Dispersión", nav_reportes: "Reportes Nómina", nav_reports: "Reportes BI",
         nav_permisos: "Permisos",
         // System
         system_active: "Sistema activo", system_name: "TimeClock", system_version: "Enterprise v2.0",
@@ -9583,7 +9979,7 @@ const TRANSLATIONS = {
     en: {
         nav_dashboard: "Dashboard", nav_departments: "Departments", nav_employees: "Employees",
         nav_time: "Time Tracking", nav_locations: "Geofences", nav_payroll: "Payroll",
-        nav_calculadora: "Calculator", nav_dispersion: "Dispersion", nav_reports: "BI Reports",
+        nav_calculadora: "Calculator", nav_dispersion: "Dispersion", nav_reportes: "Payroll Reports", nav_reports: "BI Reports",
         nav_permisos: "Permissions",
         system_active: "System online", system_name: "TimeClock", system_version: "Enterprise v2.0",
         db_connected: "Database connected", loading: "Loading...",
@@ -9886,7 +10282,7 @@ const TRANSLATIONS = {
     it: {
         nav_dashboard: "Dashboard", nav_departments: "Reparti", nav_employees: "Dipendenti",
         nav_time: "Controllo Presenze", nav_locations: "Geoclôture", nav_payroll: "Busta Paga",
-        nav_calculadora: "Calcolatrice", nav_dispersion: "Dispersione", nav_reports: "Report BI",
+        nav_calculadora: "Calcolatrice", nav_dispersion: "Dispersione", nav_reportes: "Report Paghe", nav_reports: "Report BI",
         nav_permisos: "Permessi",
         system_active: "Sistema attivo", system_name: "TimeClock", system_version: "Enterprise v2.0",
         db_connected: "Database connesso", loading: "Caricamento...",
@@ -10189,7 +10585,7 @@ const TRANSLATIONS = {
     fr: {
         nav_dashboard: "Tableau de bord", nav_departments: "Départements", nav_employees: "Employés",
         nav_time: "Gestion du temps", nav_locations: "Géofences", nav_payroll: "Paie",
-        nav_calculadora: "Calculatrice", nav_dispersion: "Dispersion", nav_reports: "Rapports BI",
+        nav_calculadora: "Calculatrice", nav_dispersion: "Dispersion", nav_reportes: "Rapports Paie", nav_reports: "Rapports BI",
         nav_permisos: "Permissions",
         system_active: "Système actif", system_name: "TimeClock", system_version: "Enterprise v2.0",
         db_connected: "Base de données connectée", loading: "Chargement...",
@@ -10492,7 +10888,7 @@ const TRANSLATIONS = {
     de: {
         nav_dashboard: "Dashboard", nav_departments: "Abteilungen", nav_employees: "Mitarbeiter",
         nav_time: "Zeiterfassung", nav_locations: "Geofences", nav_payroll: "Gehaltsabrechnung",
-        nav_calculadora: "Rechner", nav_dispersion: "Auszahlung", nav_reports: "BI-Berichte",
+        nav_calculadora: "Rechner", nav_dispersion: "Auszahlung", nav_reportes: "Gehaltsberichte", nav_reports: "BI-Berichte",
         nav_permisos: "Berechtigungen",
         system_active: "System aktiv", system_name: "TimeClock", system_version: "Enterprise v2.0",
         db_connected: "Datenbank verbunden", loading: "Wird geladen...",
@@ -11815,8 +12211,9 @@ const NAV = [
     { id: "time", icon: Clock, tkey: "nav_time" },
     { id: "payroll", icon: DollarSign, tkey: "nav_payroll" },
     { id: "calculadora", icon: Calculator, tkey: "nav_calculadora" },
-    { id: "dispersion", icon: Zap, tkey: "nav_dispersion" },
-    { id: "reports", icon: BarChart3, tkey: "nav_reports" },
+    { id: "dispersion", icon: Zap,          tkey: "nav_dispersion" },
+    { id: "reportes",   icon: ClipboardList, tkey: "nav_reportes"  },
+    { id: "reports",    icon: BarChart3,     tkey: "nav_reports"   },
     { id: "permisos", icon: Shield, tkey: "nav_permisos" },
 ];
 // ═══════════════════════════════════════════════
@@ -12057,6 +12454,7 @@ function App() {
                 view === "payroll" && React.createElement(ViewPayroll, { db: db, savePayrollCut: savePayrollCut, updatePayrollCut: updatePayrollCut, updateTaxYtd: updateTaxYtd }),
                 view === "calculadora" && React.createElement(ViewCalculadora, { db: db }),
                 view === "dispersion" && React.createElement(ViewDispersion, { db: db, upsertEmployee: upsertEmployee, updatePayrollCut: updatePayrollCut }),
+                view === "reportes" && React.createElement(ViewReportesNomina, { db: db, updatePayrollCut: updatePayrollCut }),
                 view === "reports" && React.createElement(ViewBI, { db: db }),
                 view === "permisos" && React.createElement(ViewPermisos, { db: db, upsertSystemUser: upsertSystemUser, deleteSystemUser: deleteSystemUser, updateAccessRule: updateAccessRule, updateUserOverrides: updateUserOverrides, updateCompany: updateCompany }))),
             // ── GLOBAL OFFER TOAST (visible desde cualquier módulo) ──
