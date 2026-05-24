@@ -6374,6 +6374,7 @@ const ViewReportesNomina = ({ db, updatePayrollCut, reloadFromAPI, loading }) =>
     const [filterCountry, setFilterCountry] = useState("all");
     const [searchEmp, setSearchEmp] = useState("");
     const [authNotes, setAuthNotes] = useState("");
+    const [authModal, setAuthModal] = useState(null);
     const [localCuts, setLocalCuts] = useState(null); // null = not loaded yet
 
     // Load payroll cuts directly from API on mount
