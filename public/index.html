@@ -13,39 +13,6 @@
 
   <!-- API LAYER — uses httpOnly cookies, no localStorage for auth -->
   <script>
-// ── TC_API — all server communication via httpOnly cookies ────────────
-window.TC_API = (function() {
-  const IS_SERVER = !['localhost','127.0.0.1'].includes(window.location.hostname)
-    && !window.location.hostname.startsWith('192.168.');
-
-  async function api(method, url, body) {
-    const opts = {
-      method,
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-    };
-    if (body !== undefined) opts.body = JSON.stringify(body);
-    const res = await fetch(url, opts);
-    const json = await res.json().catch(() => ({ error: res.status }));
-    if (!res.ok) throw new Error(json.error || res.status);
-    return json;
-  }
-
-  return {
-    IS_SERVER,
-    login:    (u, p)  => api('POST', '/api/auth/login', { username: u, password: p }),
-    pinLogin: (pin, empId) => api('POST', '/api/auth/pin', { pin: String(pin), empId }),
-    logout:   ()      => api('POST', '/api/auth/logout'),
-    whoAmI:   ()      => api('GET',  '/api/auth/me'),
-    loadDB:   ()      => api('GET',  '/api/db'),
-    activeEmps: ()    => api('GET',  '/api/employees/active'),
-    put:  (path, data) => api('PUT',    path, data),
-    del:  (path)       => api('DELETE', path),
-  };
-})();
-</script>
-
-  <script>
 // ── Safe localStorage (handles Tracking Prevention in Edge/Safari) ────────
 const safeLS = {
     get(k)    { try { return localStorage.getItem(k); }    catch { return (window._memStore||{})[k]||null; } },
@@ -6366,9 +6333,201 @@ const ViewDepartments = ({ db, upsertDepartment, deleteDepartment }) => {
 // ═══════════════════════════════════════════════════════════════════════
 //  REPORTES DE NÓMINA — RRHH · SAT · IMSS · GERENCIAL
 // ═══════════════════════════════════════════════════════════════════════
+
+// ══════════════════════════════════════════════════════════════════════
+//  PERÍODOS FISCALES — Gestión y Acumulados
+// ══════════════════════════════════════════════════════════════════════
+const ViewPeriodosFiscales = ({ db }) => {
+    const [periods, setPeriods] = React.useState(null);
+    const [modal, setModal] = React.useState(null); // null | 'new' | {period}
+    const [form, setForm] = React.useState({ name:'', date_start:'', date_end:'' });
+    const [selPeriod, setSelPeriod] = React.useState(null);
+    const [closing, setClosing] = React.useState(false);
+    const [msg, setMsg] = React.useState(null);
+    const [detailEmp, setDetailEmp] = React.useState(null);
+
+    const fmt  = n => '$' + Math.round(n||0).toLocaleString('es-MX');
+    const fmtD = n => (n||0).toLocaleString('es-MX', {minimumFractionDigits:2, maximumFractionDigits:2});
+
+    React.useEffect(() => {
+        if (!window.TC_API || !window.TC_API.IS_SERVER) { setPeriods([]); return; }
+        window.TC_API.getFiscalPeriods()
+            .then(data => setPeriods(data))
+            .catch(() => setPeriods([]));
+    }, []);
+
+    const handleSave = () => {
+        if (!form.name || !form.date_start || !form.date_end) { setMsg({ type:'error', text:'Completa todos los campos' }); return; }
+        const id = 'fp' + Date.now();
+        window.TC_API.saveFiscalPeriod(id, { ...form, status:'abierto' })
+            .then(() => {
+                setMsg({ type:'ok', text:'Período creado correctamente' });
+                setModal(null);
+                window.TC_API.getFiscalPeriods().then(setPeriods);
+            })
+            .catch(e => setMsg({ type:'error', text: e.message }));
+    };
+
+    const handleClose = (period) => {
+        if (!window.confirm(`¿Cerrar el período "${period.name}"? Esta acción es irreversible — todos los cortes autorizados en este rango quedarán congelados.`)) return;
+        setClosing(period.id);
+        window.TC_API.closeFiscalPeriod(period.id)
+            .then(res => {
+                setMsg({ type:'ok', text: `Período cerrado. ${res.cuts} cortes congelados, ${res.employees} empleados acumulados.` });
+                setClosing(false);
+                window.TC_API.getFiscalPeriods().then(data => { setPeriods(data); setSelPeriod(data.find(p=>p.id===period.id)); });
+            })
+            .catch(e => { setMsg({ type:'error', text: e.message }); setClosing(false); });
+    };
+
+    if (periods === null) return React.createElement('div', { style:{ padding:40, textAlign:'center', color:'#aaa' } }, '⏳ Cargando períodos...');
+
+    return React.createElement('div', { style:{ padding:24, fontFamily:'monospace' } },
+        // Header
+        React.createElement('div', { style:{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20 } },
+            React.createElement('div', null,
+                React.createElement('div', { style:{ fontSize:20, fontWeight:900, color:'#fff', marginBottom:4 } }, '📅 Períodos Fiscales'),
+                React.createElement('div', { style:{ fontSize:11, color:'#666' } }, 'Gestión de períodos, cierre fiscal y acumulados por empleado')),
+            React.createElement('button', { onClick: () => { setForm({ name:'', date_start:'', date_end:'' }); setModal('new'); },
+                style:{ padding:'9px 18px', background:'#1a4a2e', border:'1px solid #22c55e88', color:'#22c55e', fontFamily:'monospace', fontSize:11, fontWeight:700, cursor:'pointer' } },
+                '+ NUEVO PERÍODO')),
+
+        // Message
+        msg && React.createElement('div', { style:{ marginBottom:16, padding:'10px 14px',
+            background: msg.type==='ok' ? '#1a4a2e' : '#4a1a1a',
+            border: `1px solid ${msg.type==='ok' ? '#22c55e' : '#ff6b6b'}44`,
+            color: msg.type==='ok' ? '#22c55e' : '#ff6b6b', fontSize:12 } }, msg.text),
+
+        // Lista de períodos
+        periods.length === 0
+            ? React.createElement('div', { style:{ padding:40, textAlign:'center', color:'#666' } },
+                React.createElement('div', { style:{ fontSize:36, marginBottom:12 } }, '📅'),
+                React.createElement('div', { style:{ fontSize:16, color:'#aaa', marginBottom:8 } }, 'Sin períodos fiscales'),
+                React.createElement('div', { style:{ fontSize:12, color:'#666' } }, 'Crea un período para empezar a acumular nóminas'))
+            : React.createElement('div', { style:{ display:'grid', gap:12, marginBottom:24 } },
+                periods.map(p => {
+                    const isClosed = p.status === 'cerrado';
+                    const data = typeof p.data === 'string' ? JSON.parse(p.data||'{}') : (p.data||{});
+                    const empAccum = data.employeeAccum || {};
+                    const empList = Object.values(empAccum);
+                    const isSelected = selPeriod && selPeriod.id === p.id;
+
+                    return React.createElement('div', { key:p.id, style:{ border:`2px solid ${isClosed?'#22c55e44':'#334'}`, borderRadius:8, overflow:'hidden' } },
+                        // Period header
+                        React.createElement('div', { style:{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'14px 18px', background: isClosed ? '#0d2a1a' : '#1a1a2e', cursor:'pointer' },
+                            onClick: () => setSelPeriod(isSelected ? null : p) },
+                            React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:16 } },
+                                React.createElement('div', { style:{ fontSize:22 } }, isClosed ? '🔒' : '📂'),
+                                React.createElement('div', null,
+                                    React.createElement('div', { style:{ fontSize:14, fontWeight:900, color:'#fff' } }, p.name),
+                                    React.createElement('div', { style:{ fontSize:11, color:'#888', marginTop:2 } },
+                                        p.date_start + ' → ' + p.date_end)),
+                                isClosed && React.createElement('div', { style:{ padding:'3px 10px', background:'#22c55e22', border:'1px solid #22c55e44', color:'#22c55e', fontSize:9, fontWeight:700, letterSpacing:'0.1em' } }, 'CERRADO'),
+                                !isClosed && React.createElement('div', { style:{ padding:'3px 10px', background:'#74c0fc22', border:'1px solid #74c0fc44', color:'#74c0fc', fontSize:9, fontWeight:700 } }, 'ABIERTO')),
+                            React.createElement('div', { style:{ display:'flex', gap:12, alignItems:'center' } },
+                                isClosed && React.createElement('div', { style:{ textAlign:'right', fontSize:10, color:'#888' } },
+                                    React.createElement('div', null, empList.length + ' empleados'),
+                                    React.createElement('div', null, data.totalCuts + ' cortes'),
+                                    React.createElement('div', { style:{ color:'#22c55e', fontWeight:700 } }, fmt(data.grandNet||0) + ' neto')),
+                                !isClosed && React.createElement('button', { onClick: e => { e.stopPropagation(); handleClose(p); },
+                                    disabled: closing === p.id,
+                                    style:{ padding:'7px 14px', background:'#4a1a1a', border:'1px solid #ff6b6b44', color:'#ff6b6b', fontFamily:'monospace', fontSize:10, fontWeight:700, cursor:'pointer' } },
+                                    closing === p.id ? '⏳ Cerrando...' : '🔒 CERRAR PERÍODO'))),
+
+                        // Detail — employee accumulation table
+                        isSelected && isClosed && empList.length > 0 && React.createElement('div', { style:{ padding:'0 18px 18px' } },
+                            React.createElement('div', { style:{ fontSize:10, color:'#666', marginBottom:12, paddingTop:12, borderTop:'1px solid #334', letterSpacing:'0.08em' } },
+                                'ACUMULADO POR EMPLEADO — ' + p.name),
+                            React.createElement('div', { style:{ overflowX:'auto' } },
+                                React.createElement('table', { style:{ width:'100%', borderCollapse:'collapse', fontSize:11 } },
+                                    React.createElement('thead', null,
+                                        React.createElement('tr', { style:{ background:'#12122a' } },
+                                            ['EMPLEADO','PAÍS','CORTES','BRUTO ACUM.','ISR ACUM.','IMSS ACUM.','NETO ACUM.','DETALLE'].map(h =>
+                                                React.createElement('th', { key:h, style:{ padding:'8px 7px', textAlign:h==='EMPLEADO'?'left':'right', color:'#555', fontSize:9, borderBottom:'1px solid #334' } }, h)))),
+                                    React.createElement('tbody', null,
+                                        empList.map((e, i) =>
+                                            React.createElement('tr', { key:e.id, style:{ borderBottom:'1px solid #223', background:i%2===0?'transparent':'#ffffff05' } },
+                                                React.createElement('td', { style:{ padding:'7px 7px' } },
+                                                    React.createElement('div', { style:{ color:'#fff', fontWeight:700 } }, e.name),
+                                                    React.createElement('div', { style:{ fontSize:9, color:'#555' } }, e.id)),
+                                                React.createElement('td', { style:{ padding:'7px', textAlign:'center' } }, {MX:'🇲🇽',US:'🇺🇸',RD:'🇩🇴',SV:'🇸🇻'}[e.country]||'—'),
+                                                React.createElement('td', { style:{ padding:'7px', textAlign:'right', color:'#aaa' } }, e.cutsCount),
+                                                React.createElement('td', { style:{ padding:'7px', textAlign:'right', color:'#fff', fontWeight:700 } }, fmtD(e.grossTotal)),
+                                                React.createElement('td', { style:{ padding:'7px', textAlign:'right', color:'#ff6b6b' } }, fmtD(e.isrTotal)),
+                                                React.createElement('td', { style:{ padding:'7px', textAlign:'right', color:'#ffa94d' } }, fmtD(e.imssObrTotal)),
+                                                React.createElement('td', { style:{ padding:'7px', textAlign:'right', color:'#22c55e', fontWeight:900 } }, fmtD(e.netTotal)),
+                                                React.createElement('td', { style:{ padding:'7px', textAlign:'right' } },
+                                                    React.createElement('button', { onClick:()=>setDetailEmp(detailEmp&&detailEmp.id===e.id?null:e),
+                                                        style:{ padding:'3px 8px', background:'#1a2a4a', border:'1px solid #334', color:'#74c0fc', fontFamily:'monospace', fontSize:9, cursor:'pointer' } },
+                                                        detailEmp&&detailEmp.id===e.id?'▲ CERRAR':'▼ VER')))),
+                                        // Employee detail
+                                        detailEmp && React.createElement('tr', null,
+                                            React.createElement('td', { colSpan:8, style:{ padding:'12px 14px', background:'#0a0a1e', borderBottom:'2px solid #334' } },
+                                                React.createElement('div', { style:{ fontSize:10, color:'#74c0fc', marginBottom:8, fontWeight:700 } }, '📋 DETALLE POR CORTE — ' + detailEmp.name),
+                                                React.createElement('table', { style:{ width:'100%', borderCollapse:'collapse', fontSize:10 } },
+                                                    React.createElement('thead', null,
+                                                        React.createElement('tr', null,
+                                                            ['CORTE','PERÍODO','BRUTO','NETO'].map(h =>
+                                                                React.createElement('th', { key:h, style:{ padding:'5px 7px', textAlign:h==='CORTE'||h==='PERÍODO'?'left':'right', color:'#555', fontSize:9 } }, h)))),
+                                                    React.createElement('tbody', null,
+                                                        (detailEmp.cuts||[]).map((c,ci) =>
+                                                            React.createElement('tr', { key:ci, style:{ borderBottom:'1px solid #1a1a2e' } },
+                                                                React.createElement('td', { style:{ padding:'5px 7px', color:'#888', fontSize:9 } }, c.cutId),
+                                                                React.createElement('td', { style:{ padding:'5px 7px', color:'#aaa' } }, c.date||'—'),
+                                                                React.createElement('td', { style:{ padding:'5px 7px', textAlign:'right', color:'#fff' } }, fmtD(c.base||0)),
+                                                                React.createElement('td', { style:{ padding:'5px 7px', textAlign:'right', color:'#22c55e' } }, fmtD(c.net||0)))))))),
+                                        // Totals
+                                        React.createElement('tr', { style:{ borderTop:'2px solid #334', background:'#12122a', fontWeight:900 } },
+                                            React.createElement('td', { colSpan:3, style:{ padding:'10px 7px', color:'#fff', fontSize:11 } }, 'TOTAL PERÍODO — ' + empList.length + ' empleados'),
+                                            React.createElement('td', { style:{ padding:'10px 7px', textAlign:'right', color:'#fff' } }, fmtD(empList.reduce((a,e)=>a+e.grossTotal,0))),
+                                            React.createElement('td', { style:{ padding:'10px 7px', textAlign:'right', color:'#ff6b6b' } }, fmtD(empList.reduce((a,e)=>a+e.isrTotal,0))),
+                                            React.createElement('td', { style:{ padding:'10px 7px', textAlign:'right', color:'#ffa94d' } }, fmtD(empList.reduce((a,e)=>a+e.imssObrTotal,0))),
+                                            React.createElement('td', { style:{ padding:'10px 7px', textAlign:'right', color:'#22c55e', fontSize:13 } }, fmtD(empList.reduce((a,e)=>a+e.netTotal,0))),
+                                            React.createElement('td', null)))))));
+
+                })),
+
+        // Modal nuevo período
+        modal === 'new' && React.createElement('div', { style:{ position:'fixed', inset:0, background:'rgba(0,0,0,.85)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:9999 },
+            onClick:()=>setModal(null) },
+            React.createElement('div', { style:{ background:'#1a1a2e', border:'1px solid #334', borderRadius:10, padding:32, width:460, fontFamily:'monospace' }, onClick:e=>e.stopPropagation() },
+                React.createElement('div', { style:{ fontSize:16, fontWeight:900, color:'#fff', marginBottom:20 } }, '📅 Nuevo Período Fiscal'),
+                React.createElement('div', { style:{ display:'flex', flexDirection:'column', gap:14 } },
+                    React.createElement('div', null,
+                        React.createElement('div', { style:{ fontSize:10, color:'#666', marginBottom:5 } }, 'NOMBRE DEL PERÍODO'),
+                        React.createElement('input', { value:form.name, onChange:e=>setForm({...form,name:e.target.value}),
+                            placeholder:'Ej: Ejercicio Fiscal 2026 · Enero-Junio 2026',
+                            style:{ width:'100%', padding:'9px 12px', background:'#0a0a1e', border:'1px solid #334', color:'#fff', fontFamily:'monospace', fontSize:12, boxSizing:'border-box' } })),
+                    React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 } },
+                        React.createElement('div', null,
+                            React.createElement('div', { style:{ fontSize:10, color:'#666', marginBottom:5 } }, 'FECHA INICIO'),
+                            React.createElement('input', { type:'date', value:form.date_start, onChange:e=>setForm({...form,date_start:e.target.value}),
+                                style:{ width:'100%', padding:'9px 12px', background:'#0a0a1e', border:'1px solid #334', color:'#fff', fontFamily:'monospace', fontSize:12, boxSizing:'border-box' } })),
+                        React.createElement('div', null,
+                            React.createElement('div', { style:{ fontSize:10, color:'#666', marginBottom:5 } }, 'FECHA FIN'),
+                            React.createElement('input', { type:'date', value:form.date_end, onChange:e=>setForm({...form,date_end:e.target.value}),
+                                style:{ width:'100%', padding:'9px 12px', background:'#0a0a1e', border:'1px solid #334', color:'#fff', fontFamily:'monospace', fontSize:12, boxSizing:'border-box' } }))),
+                    React.createElement('div', { style:{ fontSize:10, color:'#888', padding:'8px 12px', background:'#0a0a1e', border:'1px solid #222' } },
+                        '💡 Los cortes de nómina autorizados dentro de este rango de fechas se incluirán al cerrar el período.')),
+                React.createElement('div', { style:{ display:'flex', gap:10, marginTop:20 } },
+                    React.createElement('button', { onClick:handleSave,
+                        style:{ flex:1, padding:'10px', background:'#1a4a2e', border:'1px solid #22c55e88', color:'#22c55e', fontFamily:'monospace', fontSize:12, fontWeight:700, cursor:'pointer' } },
+                        '✓ CREAR PERÍODO'),
+                    React.createElement('button', { onClick:()=>setModal(null),
+                        style:{ padding:'10px 20px', background:'transparent', border:'1px solid #334', color:'#888', fontFamily:'monospace', fontSize:12, cursor:'pointer' } },
+                        'Cancelar')))));
+};
+
 const ViewReportesNomina = ({ db, updatePayrollCut, reloadFromAPI, loading }) => {
     const [localCuts, setLocalCuts] = React.useState(null);
     const [error, setError]         = React.useState(null);
+    const [subtab, setSubtab]       = React.useState('reporte'); // 'reporte' | 'periodos'
+    const [filterText, setFilterText]   = React.useState('');
+    const [filterDept, setFilterDept]   = React.useState('all');
+    const [filterPais, setFilterPais]   = React.useState('all');
+    const [filterStatus, setFilterStatus] = React.useState('all');
+    const [sortCol, setSortCol]   = React.useState('name');
+    const [sortDir, setSortDir]   = React.useState('asc');
 
     React.useEffect(() => {
         try {
@@ -6407,76 +6566,140 @@ const ViewReportesNomina = ({ db, updatePayrollCut, reloadFromAPI, loading }) =>
 
     // Data — defined after early returns but before main return
     const cut   = localCuts[0];
-    const snaps = cut.empSnapshot || [];
     const depts = (db&&db.departments)||[];
 
+    // Apply filters and sort
+    const snapsRaw = cut.empSnapshot || [];
+    const snaps = snapsRaw
+        .filter(s => {
+            if (filterText && !(s.name||'').toLowerCase().includes(filterText.toLowerCase()) &&
+                !(s.id||'').toLowerCase().includes(filterText.toLowerCase())) return false;
+            if (filterDept !== 'all' && s.dept !== filterDept) return false;
+            if (filterPais !== 'all' && s.country !== filterPais) return false;
+            if (filterStatus === 'ok'  && !((s.net||0)>0)) return false;
+            if (filterStatus === 'err' && (s.net||0)>0)    return false;
+            return true;
+        })
+        .sort((a,b) => {
+            let va, vb;
+            if (sortCol==='name')  { va=a.name||''; vb=b.name||''; return sortDir==='asc'?va.localeCompare(vb):vb.localeCompare(va); }
+            if (sortCol==='base')  { va=a.base||0;  vb=b.base||0;  }
+            if (sortCol==='net')   { va=a.net||0;   vb=b.net||0;   }
+            if (sortCol==='isr')   { va=getISR(a);  vb=getISR(b);  }
+            if (sortCol==='dept')  { va=(depts.find(d=>d.id===a.dept)||{}).name||''; vb=(depts.find(d=>d.id===b.dept)||{}).name||''; return sortDir==='asc'?va.localeCompare(vb):vb.localeCompare(va); }
+            return sortDir==='asc' ? va-vb : vb-va;
+        });
+    const thClick = col => { setSortCol(col); setSortDir(sortCol===col&&sortDir==='asc'?'desc':'asc'); };
+    const thStyle = col => ({ padding:'9px 7px', textAlign:col==='name'||col==='dept'?'left':'right', color: sortCol===col?'#74c0fc':'#555', fontSize:9, letterSpacing:'0.07em', borderBottom:'2px solid #334', cursor:'pointer', userSelect:'none' });
+
     return React.createElement('div', { style:{ padding:24, fontFamily:'monospace' } },
-        // Header
+        // Header + subtabs
         React.createElement('div', { style:{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20 } },
             React.createElement('div', { style:{ fontSize:22, fontWeight:900, color:'#fff' } }, '📋 Reportes de Nómina'),
-            React.createElement('button', { onClick: () => window.print(),
-                style:{ padding:'8px 18px', background:'#7c3aed33', border:'1px solid #7c3aed88', color:'#a78bfa', fontFamily:'monospace', fontSize:11, fontWeight:700, cursor:'pointer' } },
-                '🖨 IMPRIMIR / PDF')),
+            React.createElement('div', { style:{ display:'flex', gap:4 } },
+                [['reporte','📊 REPORTE NÓMINA'], ['periodos','📅 PERÍODOS FISCALES']].map(function(item) {
+                    var id=item[0], label=item[1];
+                    return React.createElement('button', { key:id, onClick:function(){setSubtab(id);},
+                        style:{ padding:'8px 16px', background: subtab===id?'#7c3aed33':'transparent',
+                            border: '1px solid '+(subtab===id?'#7c3aed88':'#334'),
+                            color: subtab===id?'#a78bfa':'#666', fontFamily:'monospace', fontSize:10, fontWeight:700, cursor:'pointer' } }, label);
+                }))),
 
-        // Selector de corte
-        React.createElement('select', {
-            onChange: e => {
-                const c = localCuts.find(x => x.id === e.target.value);
-                if (c) setLocalCuts([c, ...localCuts.filter(x => x.id !== c.id)]);
-            },
-            style:{ marginBottom:20, padding:'9px 12px', background:'#1a1a2e', border:'1px solid #334', color:'#fff', fontFamily:'monospace', fontSize:12, width:'100%', cursor:'pointer' }
-        }, localCuts.map(c => React.createElement('option', { key:c.id, value:c.id },
-            (c.period||c.date||c.id) + '  ·  ' + (c.empSnapshot||[]).length + ' emp  ·  STATUS: ' + (c.status||'pendiente').toUpperCase()))),
+        subtab === 'periodos' && React.createElement(ViewPeriodosFiscales, { db: db }),
 
-        // KPIs
-        React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:10, marginBottom:24 } },
-            [
-                { l:'EMPLEADOS',    v: snaps.length,                                             color:'#74c0fc' },
-                { l:'BRUTO TOTAL',  v: fmt(snaps.reduce((a,s)=>a+(s.base||0),0)),               color:'#fff'    },
-                { l:'ISR RETENIDO', v: fmt(snaps.reduce((a,s)=>a+getISR(s),0)),                 color:'#ff6b6b' },
-                { l:'IMSS OBRERO',  v: fmt(snaps.reduce((a,s)=>a+getIMSS(s),0)),                color:'#ffa94d' },
-                { l:'NETO A PAGAR', v: fmt(snaps.reduce((a,s)=>a+(s.net||0),0)),                color:'#51cf66' },
-            ].map(k => React.createElement('div', { key:k.l, style:{ background:'#12122a', border:'1px solid #334', padding:'14px 16px', borderRadius:6 } },
-                React.createElement('div', { style:{ fontSize:9, color:'#555', marginBottom:4, letterSpacing:'0.1em' } }, k.l),
-                React.createElement('div', { style:{ fontSize:18, fontWeight:900, color:k.color } }, k.v)))),
+        subtab === 'reporte' && React.createElement('div', null,
+            React.createElement('select', {
+                onChange: function(e) {
+                    var c = localCuts.find(function(x){ return x.id === e.target.value; });
+                    if (c) setLocalCuts([c].concat(localCuts.filter(function(x){ return x.id !== c.id; })));
+                },
+                style:{ marginBottom:16, padding:'9px 12px', background:'#1a1a2e', border:'1px solid #334', color:'#fff', fontFamily:'monospace', fontSize:12, width:'100%', cursor:'pointer' }
+            }, localCuts.map(function(c) { return React.createElement('option', { key:c.id, value:c.id },
+                (c.period||c.date||c.id) + '  ·  ' + (c.empSnapshot||[]).length + ' emp  ·  ' + (c.status||'pendiente').toUpperCase()); })),
 
-        // Tabla detallada
-        React.createElement('div', { style:{ overflowX:'auto', border:'1px solid #334', borderRadius:6 } },
-            React.createElement('table', { style:{ width:'100%', borderCollapse:'collapse', fontSize:11 } },
-                React.createElement('thead', null,
-                    React.createElement('tr', { style:{ background:'#1a1a2e' } },
-                        ['#','EMPLEADO','DEPTO','🌎','DÍAS','BRUTO','ISR','IMSS OB.','OTRAS DED.','NETO','TASA %','STATUS'].map(h =>
-                            React.createElement('th', { key:h, style:{ padding:'9px 7px', textAlign:h==='EMPLEADO'||h==='DEPTO'?'left':'right', color:'#555', fontSize:9, letterSpacing:'0.07em', borderBottom:'2px solid #334' } }, h)))),
-                React.createElement('tbody', null,
-                    snaps.map((s, i) => {
-                        const ok = (s.net||0) > 0;
-                        const dept = depts.find(d=>d.id===s.dept);
-                        return React.createElement('tr', { key:s.id||i, style:{ borderBottom:'1px solid #223', background: i%2===0 ? 'transparent' : '#ffffff06' } },
-                            React.createElement('td', { style:{ padding:'8px 7px', color:'#444', textAlign:'right' } }, i+1),
-                            React.createElement('td', { style:{ padding:'8px 7px' } },
-                                React.createElement('div', { style:{ color:'#fff', fontWeight:700 } }, s.name),
-                                React.createElement('div', { style:{ fontSize:9, color:'#555' } }, s.id)),
-                            React.createElement('td', { style:{ padding:'8px 7px', color:'#888', fontSize:10 } }, (dept&&dept.name)||s.dept||'—'),
-                            React.createElement('td', { style:{ padding:'8px 7px', textAlign:'center' } }, {MX:'🇲🇽',US:'🇺🇸',RD:'🇩🇴',SV:'🇸🇻'}[s.country]||'—'),
-                            React.createElement('td', { style:{ padding:'8px 7px', textAlign:'right', color:'#aaa' } }, s.periodDays||'—'),
-                            React.createElement('td', { style:{ padding:'8px 7px', textAlign:'right', color:'#fff', fontWeight:700 } }, fmtD(s.base||0)),
-                            React.createElement('td', { style:{ padding:'8px 7px', textAlign:'right', color:'#ff6b6b' } }, fmtD(getISR(s))),
-                            React.createElement('td', { style:{ padding:'8px 7px', textAlign:'right', color:'#ffa94d' } }, fmtD(getIMSS(s))),
-                            React.createElement('td', { style:{ padding:'8px 7px', textAlign:'right', color:'#777' } }, fmtD(getOtras(s))),
-                            React.createElement('td', { style:{ padding:'8px 7px', textAlign:'right', color:'#51cf66', fontWeight:900, fontSize:13 } }, fmtD(s.net||0)),
-                            React.createElement('td', { style:{ padding:'8px 7px', textAlign:'right', color:'#aaa', fontSize:10 } }, (s.effectiveRate||'0')+'%'),
-                            React.createElement('td', { style:{ padding:'8px 7px', textAlign:'center', fontSize:10, fontWeight:700, color:ok?'#51cf66':'#ff6b6b' } }, ok?'✓ OK':'⚠ ERR'));
-                    }),
-                    React.createElement('tr', { style:{ borderTop:'2px solid #334', background:'#1a1a2e', fontWeight:900 } },
-                        React.createElement('td', { colSpan:5, style:{ padding:'10px 7px', color:'#fff', fontSize:11 } }, 'TOTAL — ' + snaps.length + ' empleados'),
-                        React.createElement('td', { style:{ padding:'10px 7px', textAlign:'right', color:'#fff' } }, fmtD(snaps.reduce((a,s)=>a+(s.base||0),0))),
-                        React.createElement('td', { style:{ padding:'10px 7px', textAlign:'right', color:'#ff6b6b' } }, fmtD(snaps.reduce((a,s)=>a+getISR(s),0))),
-                        React.createElement('td', { style:{ padding:'10px 7px', textAlign:'right', color:'#ffa94d' } }, fmtD(snaps.reduce((a,s)=>a+getIMSS(s),0))),
-                        React.createElement('td', { style:{ padding:'10px 7px', textAlign:'right', color:'#777' } }, fmtD(snaps.reduce((a,s)=>a+getOtras(s),0))),
-                        React.createElement('td', { style:{ padding:'10px 7px', textAlign:'right', color:'#51cf66', fontSize:14 } }, fmtD(snaps.reduce((a,s)=>a+(s.net||0),0))),
-                        React.createElement('td', { colSpan:2 }))))));
+            React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'repeat(5,1fr)', gap:10, marginBottom:16 } },
+                [
+                    { l:'EMPLEADOS',    v: snaps.length + (snaps.length<snapsRaw.length?' / '+snapsRaw.length:''), color:'#74c0fc' },
+                    { l:'BRUTO TOTAL',  v: fmt(snaps.reduce(function(a,s){return a+(s.base||0);},0)),     color:'#fff'    },
+                    { l:'ISR RETENIDO', v: fmt(snaps.reduce(function(a,s){return a+getISR(s);},0)),       color:'#ff6b6b' },
+                    { l:'IMSS OBRERO',  v: fmt(snaps.reduce(function(a,s){return a+getIMSS(s);},0)),      color:'#ffa94d' },
+                    { l:'NETO A PAGAR', v: fmt(snaps.reduce(function(a,s){return a+(s.net||0);},0)),      color:'#51cf66' },
+                ].map(function(k) { return React.createElement('div', { key:k.l, style:{ background:'#12122a', border:'1px solid #334', padding:'12px 14px', borderRadius:6 } },
+                    React.createElement('div', { style:{ fontSize:9, color:'#555', marginBottom:4, letterSpacing:'0.1em' } }, k.l),
+                    React.createElement('div', { style:{ fontSize:16, fontWeight:900, color:k.color } }, k.v)); })),
+
+            React.createElement('div', { style:{ display:'flex', gap:8, marginBottom:14, flexWrap:'wrap', alignItems:'center', padding:'10px 12px', background:'#12122a', border:'1px solid #334', borderRadius:6 } },
+                React.createElement('span', { style:{ fontSize:9, color:'#555', letterSpacing:'0.08em' } }, '🔍 FILTROS:'),
+                React.createElement('input', { placeholder:'Buscar empleado...', value:filterText, onChange:function(e){setFilterText(e.target.value);},
+                    style:{ flex:1, minWidth:140, padding:'5px 9px', background:'#0a0a1e', border:'1px solid #334', color:'#fff', fontFamily:'monospace', fontSize:11 } }),
+                React.createElement('select', { value:filterDept, onChange:function(e){setFilterDept(e.target.value);},
+                    style:{ padding:'5px 9px', background:'#0a0a1e', border:'1px solid #334', color:'#fff', fontFamily:'monospace', fontSize:11 } },
+                    React.createElement('option', { value:'all' }, 'Todos los deptos.'),
+                    depts.map(function(d){ return React.createElement('option', { key:d.id, value:d.id }, d.name); })),
+                React.createElement('select', { value:filterPais, onChange:function(e){setFilterPais(e.target.value);},
+                    style:{ padding:'5px 9px', background:'#0a0a1e', border:'1px solid #334', color:'#fff', fontFamily:'monospace', fontSize:11 } },
+                    React.createElement('option', { value:'all' }, 'Todos los países'),
+                    ['MX','US','RD','SV'].map(function(p){ return React.createElement('option', { key:p, value:p }, {MX:'🇲🇽 México',US:'🇺🇸 USA',RD:'🇩🇴 Rep. Dom.',SV:'🇸🇻 El Salvador'}[p]); })),
+                React.createElement('select', { value:filterStatus, onChange:function(e){setFilterStatus(e.target.value);},
+                    style:{ padding:'5px 9px', background:'#0a0a1e', border:'1px solid #334', color:'#fff', fontFamily:'monospace', fontSize:11 } },
+                    React.createElement('option', { value:'all' }, 'Todos'),
+                    React.createElement('option', { value:'ok'  }, '✓ Solo OK'),
+                    React.createElement('option', { value:'err' }, '⚠ Solo errores')),
+                (filterText||filterDept!=='all'||filterPais!=='all'||filterStatus!=='all') &&
+                    React.createElement('button', { onClick:function(){setFilterText('');setFilterDept('all');setFilterPais('all');setFilterStatus('all');},
+                        style:{ padding:'5px 10px', background:'transparent', border:'1px solid #334', color:'#888', fontFamily:'monospace', fontSize:10, cursor:'pointer' } }, '✕'),
+                React.createElement('button', { onClick:function(){window.print();},
+                    style:{ padding:'5px 14px', background:'#7c3aed33', border:'1px solid #7c3aed88', color:'#a78bfa', fontFamily:'monospace', fontSize:10, fontWeight:700, cursor:'pointer', marginLeft:'auto' } },
+                    '🖨 PDF')),
+
+            snaps.length === 0
+                ? React.createElement('div', { style:{ padding:24, textAlign:'center', color:'#666', border:'1px solid #334' } }, 'Sin resultados con los filtros seleccionados')
+                : React.createElement('div', { style:{ overflowX:'auto', border:'1px solid #334', borderRadius:6 } },
+                    React.createElement('table', { style:{ width:'100%', borderCollapse:'collapse', fontSize:11 } },
+                        React.createElement('thead', null,
+                            React.createElement('tr', { style:{ background:'#1a1a2e' } },
+                                React.createElement('th', { style:{ padding:'8px 6px', color:'#555', fontSize:9, borderBottom:'2px solid #334' } }, '#'),
+                                React.createElement('th', { onClick:function(){thClick('name');}, style:thStyle('name') }, 'EMPLEADO '+(sortCol==='name'?(sortDir==='asc'?'↑':'↓'):'')),
+                                React.createElement('th', { onClick:function(){thClick('dept');}, style:thStyle('dept') }, 'DEPTO '+(sortCol==='dept'?(sortDir==='asc'?'↑':'↓'):'')),
+                                React.createElement('th', { style:{ padding:'8px 6px', color:'#555', fontSize:9, borderBottom:'2px solid #334', textAlign:'center' } }, '🌎'),
+                                React.createElement('th', { style:{ padding:'8px 6px', color:'#555', fontSize:9, borderBottom:'2px solid #334', textAlign:'right' } }, 'DÍAS'),
+                                React.createElement('th', { onClick:function(){thClick('base');}, style:thStyle('base') }, 'BRUTO '+(sortCol==='base'?(sortDir==='asc'?'↑':'↓'):'')),
+                                React.createElement('th', { onClick:function(){thClick('isr');},  style:thStyle('isr')  }, 'ISR '+(sortCol==='isr'?(sortDir==='asc'?'↑':'↓'):'')),
+                                React.createElement('th', { style:{ padding:'8px 6px', color:'#555', fontSize:9, borderBottom:'2px solid #334', textAlign:'right' } }, 'IMSS OB.'),
+                                React.createElement('th', { style:{ padding:'8px 6px', color:'#555', fontSize:9, borderBottom:'2px solid #334', textAlign:'right' } }, 'OTRAS DED.'),
+                                React.createElement('th', { onClick:function(){thClick('net');},  style:thStyle('net')  }, 'NETO '+(sortCol==='net'?(sortDir==='asc'?'↑':'↓'):'')),
+                                React.createElement('th', { style:{ padding:'8px 6px', color:'#555', fontSize:9, borderBottom:'2px solid #334', textAlign:'right' } }, 'TASA %'),
+                                React.createElement('th', { style:{ padding:'8px 6px', color:'#555', fontSize:9, borderBottom:'2px solid #334', textAlign:'center' } }, 'STATUS'))),
+                        React.createElement('tbody', null,
+                            snaps.map(function(s, i) {
+                                var ok = (s.net||0) > 0;
+                                var dept = depts.find(function(d){return d.id===s.dept;});
+                                return React.createElement('tr', { key:s.id||i, style:{ borderBottom:'1px solid #223', background: i%2===0?'transparent':'#ffffff05' } },
+                                    React.createElement('td', { style:{ padding:'7px 6px', color:'#444', textAlign:'right' } }, i+1),
+                                    React.createElement('td', { style:{ padding:'7px 6px' } },
+                                        React.createElement('div', { style:{ color:'#fff', fontWeight:700 } }, s.name),
+                                        React.createElement('div', { style:{ fontSize:9, color:'#555' } }, s.id)),
+                                    React.createElement('td', { style:{ padding:'7px 6px', color:'#888', fontSize:10 } }, (dept&&dept.name)||s.dept||'—'),
+                                    React.createElement('td', { style:{ padding:'7px 6px', textAlign:'center' } }, {MX:'🇲🇽',US:'🇺🇸',RD:'🇩🇴',SV:'🇸🇻'}[s.country]||'—'),
+                                    React.createElement('td', { style:{ padding:'7px 6px', textAlign:'right', color:'#aaa' } }, s.periodDays||'—'),
+                                    React.createElement('td', { style:{ padding:'7px 6px', textAlign:'right', color:'#fff', fontWeight:700 } }, fmtD(s.base||0)),
+                                    React.createElement('td', { style:{ padding:'7px 6px', textAlign:'right', color:'#ff6b6b' } }, fmtD(getISR(s))),
+                                    React.createElement('td', { style:{ padding:'7px 6px', textAlign:'right', color:'#ffa94d' } }, fmtD(getIMSS(s))),
+                                    React.createElement('td', { style:{ padding:'7px 6px', textAlign:'right', color:'#777' } }, fmtD(getOtras(s))),
+                                    React.createElement('td', { style:{ padding:'7px 6px', textAlign:'right', color:'#51cf66', fontWeight:900, fontSize:12 } }, fmtD(s.net||0)),
+                                    React.createElement('td', { style:{ padding:'7px 6px', textAlign:'right', color:'#aaa', fontSize:10 } }, (s.effectiveRate||'0')+'%'),
+                                    React.createElement('td', { style:{ padding:'7px 6px', textAlign:'center', fontSize:10, fontWeight:700, color:ok?'#51cf66':'#ff6b6b' } }, ok?'✓ OK':'⚠ ERR'));
+                            }),
+                            React.createElement('tr', { style:{ borderTop:'2px solid #334', background:'#1a1a2e' } },
+                                React.createElement('td', { colSpan:5, style:{ padding:'10px 6px', color:'#fff', fontSize:11, fontWeight:900 } },
+                                    'TOTAL — ' + snaps.length + ' emp' + (snaps.length<snapsRaw.length?' (filtrado de '+snapsRaw.length+')':'')),
+                                React.createElement('td', { style:{ padding:'10px 6px', textAlign:'right', color:'#fff', fontWeight:900 } }, fmtD(snaps.reduce(function(a,s){return a+(s.base||0);},0))),
+                                React.createElement('td', { style:{ padding:'10px 6px', textAlign:'right', color:'#ff6b6b', fontWeight:900 } }, fmtD(snaps.reduce(function(a,s){return a+getISR(s);},0))),
+                                React.createElement('td', { style:{ padding:'10px 6px', textAlign:'right', color:'#ffa94d', fontWeight:900 } }, fmtD(snaps.reduce(function(a,s){return a+getIMSS(s);},0))),
+                                React.createElement('td', { style:{ padding:'10px 6px', textAlign:'right', color:'#777', fontWeight:900 } }, fmtD(snaps.reduce(function(a,s){return a+getOtras(s);},0))),
+                                React.createElement('td', { style:{ padding:'10px 6px', textAlign:'right', color:'#51cf66', fontWeight:900, fontSize:13 } }, fmtD(snaps.reduce(function(a,s){return a+(s.net||0);},0))),
+                                React.createElement('td', { colSpan:2 })))))));
 };
-
 
 const ViewDispersion = ({ db, upsertEmployee, updatePayrollCut }) => {
     const { t } = useT();
