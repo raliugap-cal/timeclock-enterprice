@@ -20,6 +20,34 @@ const safeLS = {
     remove(k) { try { localStorage.removeItem(k); }        catch {} delete (window._memStore||{})[k]; }
 };
 
+// ── API Layer — httpOnly cookie auth ──────────────────────────────────────
+window.TC_API = (function() {
+    const BASE = '';
+    const IS_SERVER = !!(window.location.hostname !== 'localhost' || window.location.port === '3000' || window.location.port === '8080' || window.location.pathname !== '/');
+    async function api(method, url, body) {
+        const opts = { method, credentials: 'include', headers: { 'Content-Type': 'application/json' } };
+        if (body !== undefined) opts.body = JSON.stringify(body);
+        const res = await fetch(BASE + url, opts);
+        if (!res.ok) { const err = await res.json().catch(() => ({ error: res.statusText })); throw new Error(err.error || res.statusText); }
+        return res.json();
+    }
+    return {
+        IS_SERVER,
+        login:    (u, p)  => api('POST', '/api/auth/login', { username: u, password: p }),
+        pinLogin: (pin, empId) => api('POST', '/api/auth/pin', { pin: String(pin), empId }),
+        logout:   ()      => api('POST', '/api/auth/logout'),
+        whoAmI:   ()      => api('GET',  '/api/auth/me'),
+        loadDB:   ()      => api('GET',  '/api/db'),
+        getFiscalPeriods:  () => api('GET',  '/api/fiscal-periods'),
+        saveFiscalPeriod:  (id, data) => api('PUT', `/api/fiscal-periods/${id}`, data),
+        closeFiscalPeriod: (id) => api('POST', `/api/fiscal-periods/${id}/close`, {}),
+        activeEmps: () => api('GET', '/api/employees/active'),
+        put:      (url, data) => api('PUT',    url, data),
+        del:      (url)       => api('DELETE', url),
+        post:     (url, data) => api('POST',   url, data),
+    };
+})();
+
 
 // ══════════════════════════════════════════════════════════════════
 //  DESIGN SYSTEM COMPONENTS
