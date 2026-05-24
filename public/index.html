@@ -6375,38 +6375,42 @@ const ViewReportesNomina = ({ db, updatePayrollCut, reloadFromAPI }) => {
     const [searchEmp, setSearchEmp] = useState("");
     const [authNotes, setAuthNotes] = useState("");
 
-    // Forzar reload al entrar al módulo para obtener datos frescos del servidor
+    // ALL hooks must be before any conditional return (Rules of Hooks)
+    const cuts = ((db && db.payrollCuts) || []).slice().sort((a,b) => new Date(b.date||0) - new Date(a.date||0));
+    const cutsConSnap = cuts.filter(c => c.empSnapshot && c.empSnapshot.length > 0);
+    const activeCut = (selCut && selCut.empSnapshot && selCut.empSnapshot.length > 0)
+        ? selCut : cutsConSnap[0] || cuts[0] || null;
+
     React.useEffect(() => {
-        if (reloadFromAPI && window.TC_API?.IS_SERVER) reloadFromAPI();
+        if (reloadFromAPI && window.TC_API && window.TC_API.IS_SERVER) reloadFromAPI();
     }, []);
 
-    if (!db) return React.createElement("div", { style: { padding: 40, textAlign: "center", color: DS.textDim, fontFamily: DS.sans } }, "Cargando...");
-
-    const cuts = (db.payrollCuts || []).sort((a,b) => new Date(b.date||0) - new Date(a.date||0));
-    const depts = (db.departments || []);
-    const emps  = (db.employees  || []);
-    const ytd   = db.taxYtd || {};
-
-    // Seleccionar corte automáticamente
     React.useEffect(() => {
-        if (!selCut && cuts.length > 0) setSelCut(cuts[0]);
-    }, [cuts.length]);
+        if (!selCut && cutsConSnap.length > 0) setSelCut(cutsConSnap[0]);
+    }, [cutsConSnap.length]);
+
+    const depts = (db && db.departments) || [];
+    const emps  = (db && db.employees)  || [];
+    const ytd   = (db && db.taxYtd)     || {};
+
+    // ── NOW safe to do conditional returns ──────────────────────────
+    if (!db) return React.createElement("div", { style: { padding: 40, textAlign: "center", color: DS.textDim, fontFamily: DS.sans } },
+        React.createElement("div", null, "⏳ Cargando..."));
 
     if (cuts.length === 0) return React.createElement("div", { style: { padding: 40, textAlign: "center", color: DS.textDim, fontFamily: DS.sans } },
         React.createElement("div", { style: { fontSize: 48, marginBottom: 16 } }, "📋"),
         React.createElement("div", { style: { fontSize: 18, fontWeight: 700, color: DS.text, marginBottom: 8 } }, "Sin cortes de nómina"),
         React.createElement("div", { style: { fontSize: 13, color: DS.textDim } }, "Ve a Nómina → Nuevo Corte para generar tu primer corte."));
 
-    // Cortes con empSnapshot válido
-    const cutsConSnap = cuts.filter(c => c.empSnapshot && c.empSnapshot.length > 0);
-    const cut = selCut && selCut.empSnapshot?.length > 0 ? selCut : cutsConSnap[0] || cuts[0];
+    if (!activeCut || !activeCut.empSnapshot || activeCut.empSnapshot.length === 0)
+        return React.createElement("div", null,
+            React.createElement(SectionHeader, { icon: ClipboardList, label: "Reportes de Nómina" }),
+            React.createElement("div", { style: { padding: 40, textAlign: "center", color: DS.textDim, fontFamily: DS.sans } },
+                React.createElement("div", { style: { fontSize: 48, marginBottom: 16 } }, "⚠️"),
+                React.createElement("div", { style: { fontSize: 16, fontWeight: 700, color: DS.text, marginBottom: 8 } }, "Los cortes existentes no tienen detalle por empleado"),
+                React.createElement("div", { style: { fontSize: 13, color: DS.textDim } }, "Genera un nuevo corte desde Nómina → Ver el reporte detallado.")));
 
-    if (!cut.empSnapshot || cut.empSnapshot.length === 0) return React.createElement("div", null,
-        React.createElement(SectionHeader, { icon: ClipboardList, label: "Reportes de Nómina" }),
-        React.createElement("div", { style: { padding: 40, textAlign: "center", color: DS.textDim, fontFamily: DS.sans } },
-            React.createElement("div", { style: { fontSize: 48, marginBottom: 16 } }, "⚠️"),
-            React.createElement("div", { style: { fontSize: 16, fontWeight: 700, color: DS.text, marginBottom: 8 } }, "Los cortes existentes no tienen detalle por empleado"),
-            React.createElement("div", { style: { fontSize: 13, color: DS.textDim } }, "Genera un nuevo corte desde Nómina para ver el reporte detallado.")));
+    const cut = activeCut;
 
     const snaps = (cut.empSnapshot || []).filter(s => {
         if (filterDept !== "all" && s.dept !== filterDept) return false;
