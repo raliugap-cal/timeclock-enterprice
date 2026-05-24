@@ -1324,6 +1324,203 @@ const LoginScreen = ({ db, onLoginAdmin, onLoginEmployee, onServerLogin, activeE
 };
 //  EMPLOYEE PORTAL — Vista del empleado al hacer login
 // ═══════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════
+//  RECIBO DE NÓMINA — Portal del Empleado
+// ══════════════════════════════════════════════════════════════════════
+const ReciboModal = ({ snap, cut, company, onClose }) => {
+    const fmtD = n => (n||0).toLocaleString('es-MX', {minimumFractionDigits:2, maximumFractionDigits:2});
+    const isr   = Math.max(0, (snap.deds&&snap.deds['ISR Art. 96 LISR']||0) - (snap.deds&&snap.deds['Subsidio al Empleo']||0));
+    const imssItems = [
+        ['IMSS Invalidez y Vida',  snap.deds&&snap.deds['IMSS Invalidez y Vida']||0],
+        ['IMSS Cesantía y Vejez',  snap.deds&&snap.deds['IMSS Cesantía y Vejez']||0],
+        ['IMSS Enf. y Maternidad', snap.deds&&snap.deds['IMSS Enf. y Maternidad']||0],
+    ].filter(([,v])=>v>0);
+    const otherDeds = Object.entries(snap.deds||{}).filter(([k])=>
+        !['ISR Art. 96 LISR','Subsidio al Empleo','IMSS Invalidez y Vida','IMSS Cesantía y Vejez','IMSS Enf. y Maternidad'].includes(k));
+
+    const handlePrint = () => {
+        const w = window.open('','_blank','width=800,height=900');
+        const companyName = (company&&company.name)||'Empresa';
+        const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+        <title>Recibo de Nómina — ${snap.name}</title>
+        <style>
+            body { font-family: Arial, sans-serif; margin: 0; padding: 20px; color: #000; font-size: 12px; }
+            .header { background: #1B3A5C; color: white; padding: 16px 20px; margin-bottom: 16px; }
+            .header h1 { margin:0; font-size:20px; }
+            .header p  { margin:4px 0 0; font-size:11px; opacity:.8; }
+            .info-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:16px; }
+            .info-box { border:1px solid #ddd; padding:10px 12px; }
+            .info-box label { font-size:9px; color:#888; text-transform:uppercase; display:block; margin-bottom:2px; }
+            .info-box span { font-size:13px; font-weight:700; }
+            table { width:100%; border-collapse:collapse; margin-bottom:12px; }
+            th { background:#f5f5f5; padding:6px 8px; text-align:left; font-size:10px; border-bottom:2px solid #ddd; }
+            td { padding:6px 8px; border-bottom:1px solid #eee; font-size:11px; }
+            .amount { text-align:right; font-family:monospace; }
+            .total-row { background:#f9f9f9; font-weight:700; border-top:2px solid #ddd; }
+            .neto { background:#1B3A5C; color:white; padding:16px 20px; text-align:center; margin-top:16px; }
+            .neto .label { font-size:11px; opacity:.8; }
+            .neto .amount { font-size:28px; font-weight:900; }
+            .footer { text-align:center; font-size:9px; color:#aaa; margin-top:20px; border-top:1px solid #eee; padding-top:12px; }
+            @media print { body { margin:0; } }
+        </style></head><body>
+        <div class="header">
+            <h1>${companyName}</h1>
+            <p>Recibo de Nómina · ${cut.period||cut.date||''}</p>
+        </div>
+        <div class="info-grid">
+            <div class="info-box"><label>Empleado</label><span>${snap.name}</span></div>
+            <div class="info-box"><label>ID</label><span>${snap.id}</span></div>
+            <div class="info-box"><label>Departamento</label><span>${snap.dept||'—'}</span></div>
+            <div class="info-box"><label>Período</label><span>${cut.period||cut.date||'—'}</span></div>
+            <div class="info-box"><label>Tipo</label><span>${(cut.type||'').toUpperCase()}</span></div>
+            <div class="info-box"><label>País / Régimen</label><span>${snap.country} · ${snap.regime||'—'}</span></div>
+        </div>
+        <table>
+            <tr><th>PERCEPCIONES</th><th class="amount">IMPORTE</th></tr>
+            <tr><td>Salario Base del Período</td><td class="amount">$${fmtD(snap.base)}</td></tr>
+            ${(snap.conceptosEspeciales||[]).filter(c=>c.tipo==='percepcion').map(c=>`<tr><td>${c.label}</td><td class="amount">$${fmtD(c.monto)}</td></tr>`).join('')}
+            <tr class="total-row"><td>TOTAL PERCEPCIONES</td><td class="amount">$${fmtD(snap.base)}</td></tr>
+        </table>
+        <table>
+            <tr><th>DEDUCCIONES</th><th class="amount">IMPORTE</th></tr>
+            <tr><td>ISR Art. 96 LISR (retenido)</td><td class="amount">$${fmtD(isr)}</td></tr>
+            ${(snap.deds&&snap.deds['Subsidio al Empleo']>0)?`<tr><td>Subsidio al Empleo</td><td class="amount">(- $${fmtD(snap.deds['Subsidio al Empleo'])})</td></tr>`:''}
+            ${imssItems.map(([k,v])=>`<tr><td>${k}</td><td class="amount">$${fmtD(v)}</td></tr>`).join('')}
+            ${otherDeds.map(([k,v])=>`<tr><td>${k}</td><td class="amount">$${fmtD(v)}</td></tr>`).join('')}
+            <tr class="total-row"><td>TOTAL DEDUCCIONES</td><td class="amount">$${fmtD(snap.totalDed||0)}</td></tr>
+        </table>
+        <div class="neto">
+            <div class="label">NETO A PAGAR</div>
+            <div class="amount">${snap.currency||'MXN'} $${fmtD(snap.net)}</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:40px;padding-top:16px;border-top:1px solid #eee;">
+            <div style="text-align:center">
+                <div style="border-top:1px solid #000;padding-top:6px;font-size:10px;color:#888">Firma del Empleado</div>
+            </div>
+            <div style="text-align:center">
+                <div style="border-top:1px solid #000;padding-top:6px;font-size:10px;color:#888">Firma Autorizada</div>
+            </div>
+        </div>
+        <div class="footer">Este recibo fue generado por TimeClock Enterprise · ${new Date().toLocaleDateString('es-MX')} · Tasa efectiva: ${snap.effectiveRate||0}%</div>
+        </body></html>`;
+        w.document.write(html);
+        w.document.close();
+        setTimeout(() => w.print(), 500);
+    };
+
+    return React.createElement('div', { style:{ position:'fixed', inset:0, background:'rgba(0,0,0,.92)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:9999, padding:16 },
+        onClick: onClose },
+        React.createElement('div', { style:{ background:'#1a1a2e', border:'1px solid #334', borderRadius:12, width:'100%', maxWidth:560, maxHeight:'90vh', overflowY:'auto', fontFamily:'monospace' },
+            onClick: e => e.stopPropagation() },
+            // Header
+            React.createElement('div', { style:{ background:'#1B3A5C', padding:'16px 20px', borderRadius:'12px 12px 0 0' } },
+                React.createElement('div', { style:{ display:'flex', alignItems:'center', justifyContent:'space-between' } },
+                    React.createElement('div', null,
+                        React.createElement('div', { style:{ fontSize:16, fontWeight:900, color:'#fff' } }, snap.name),
+                        React.createElement('div', { style:{ fontSize:11, color:'#94a3b8', marginTop:2 } }, 'Recibo de Nómina · ' + (cut.period||cut.date||''))),
+                    React.createElement('div', { style:{ display:'flex', gap:8 } },
+                        React.createElement('button', { onClick: handlePrint,
+                            style:{ padding:'7px 14px', background:'#22c55e22', border:'1px solid #22c55e66', color:'#22c55e', fontFamily:'monospace', fontSize:10, fontWeight:700, cursor:'pointer', borderRadius:4 } },
+                            '🖨 PDF'),
+                        React.createElement('button', { onClick: onClose,
+                            style:{ padding:'7px 12px', background:'transparent', border:'1px solid #334', color:'#888', fontFamily:'monospace', fontSize:12, cursor:'pointer', borderRadius:4 } }, '✕')))),
+
+            // Employee info
+            React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, padding:16, borderBottom:'1px solid #334' } },
+                [['Empleado',snap.name],['ID',snap.id],['Departamento',snap.dept||'—'],['Período',cut.period||cut.date||'—'],
+                 ['Tipo',(cut.type||'').toUpperCase()],['Régimen',snap.regime||'—']].map(([l,v]) =>
+                    React.createElement('div', { key:l, style:{ background:'#12122a', padding:'8px 10px', borderRadius:4 } },
+                        React.createElement('div', { style:{ fontSize:8, color:'#555', marginBottom:2 } }, l),
+                        React.createElement('div', { style:{ fontSize:12, fontWeight:700, color:'#fff' } }, v)))),
+
+            // Percepciones
+            React.createElement('div', { style:{ padding:'12px 16px', borderBottom:'1px solid #334' } },
+                React.createElement('div', { style:{ fontSize:9, color:'#22c55e', fontWeight:700, letterSpacing:'0.1em', marginBottom:8 } }, 'PERCEPCIONES'),
+                React.createElement('div', { style:{ display:'flex', justifyContent:'space-between', padding:'6px 0', borderBottom:'1px solid #223' } },
+                    React.createElement('span', { style:{ color:'#aaa', fontSize:11 } }, 'Salario Base del Período'),
+                    React.createElement('span', { style:{ color:'#fff', fontWeight:700, fontFamily:'monospace' } }, '$'+fmtD(snap.base))),
+                ...(snap.conceptosEspeciales||[]).filter(c=>c.tipo==='percepcion').map(c =>
+                    React.createElement('div', { key:c.label, style:{ display:'flex', justifyContent:'space-between', padding:'5px 0', borderBottom:'1px solid #223' } },
+                        React.createElement('span', { style:{ color:'#aaa', fontSize:11 } }, c.label),
+                        React.createElement('span', { style:{ color:'#22c55e', fontFamily:'monospace' } }, '$'+fmtD(c.monto)))),
+                React.createElement('div', { style:{ display:'flex', justifyContent:'space-between', padding:'8px 0', fontWeight:900 } },
+                    React.createElement('span', { style:{ color:'#fff', fontSize:12 } }, 'TOTAL PERCEPCIONES'),
+                    React.createElement('span', { style:{ color:'#fff', fontFamily:'monospace', fontSize:13 } }, '$'+fmtD(snap.base)))),
+
+            // Deducciones
+            React.createElement('div', { style:{ padding:'12px 16px', borderBottom:'1px solid #334' } },
+                React.createElement('div', { style:{ fontSize:9, color:'#ff6b6b', fontWeight:700, letterSpacing:'0.1em', marginBottom:8 } }, 'DEDUCCIONES'),
+                React.createElement('div', { style:{ display:'flex', justifyContent:'space-between', padding:'5px 0', borderBottom:'1px solid #223' } },
+                    React.createElement('span', { style:{ color:'#aaa', fontSize:11 } }, 'ISR Art. 96 LISR'),
+                    React.createElement('span', { style:{ color:'#ff6b6b', fontFamily:'monospace' } }, '$'+fmtD(snap.deds&&snap.deds['ISR Art. 96 LISR']||0))),
+                snap.deds&&snap.deds['Subsidio al Empleo']>0 && React.createElement('div', { style:{ display:'flex', justifyContent:'space-between', padding:'5px 0', borderBottom:'1px solid #223' } },
+                    React.createElement('span', { style:{ color:'#aaa', fontSize:11 } }, 'Subsidio al Empleo'),
+                    React.createElement('span', { style:{ color:'#22c55e', fontFamily:'monospace' } }, '(- $'+fmtD(snap.deds['Subsidio al Empleo'])+')')),
+                ...imssItems.map(([k,v]) =>
+                    React.createElement('div', { key:k, style:{ display:'flex', justifyContent:'space-between', padding:'5px 0', borderBottom:'1px solid #223' } },
+                        React.createElement('span', { style:{ color:'#aaa', fontSize:11 } }, k),
+                        React.createElement('span', { style:{ color:'#ffa94d', fontFamily:'monospace' } }, '$'+fmtD(v)))),
+                ...otherDeds.map(([k,v]) =>
+                    React.createElement('div', { key:k, style:{ display:'flex', justifyContent:'space-between', padding:'5px 0', borderBottom:'1px solid #223' } },
+                        React.createElement('span', { style:{ color:'#aaa', fontSize:11 } }, k),
+                        React.createElement('span', { style:{ color:'#ff6b6b', fontFamily:'monospace' } }, '$'+fmtD(v)))),
+                React.createElement('div', { style:{ display:'flex', justifyContent:'space-between', padding:'8px 0', fontWeight:900 } },
+                    React.createElement('span', { style:{ color:'#fff', fontSize:12 } }, 'TOTAL DEDUCCIONES'),
+                    React.createElement('span', { style:{ color:'#ff6b6b', fontFamily:'monospace', fontSize:13 } }, '$'+fmtD(snap.totalDed||0)))),
+
+            // Neto
+            React.createElement('div', { style:{ padding:20, background:'#0d2a1a', margin:16, borderRadius:8, textAlign:'center', border:'1px solid #22c55e44' } },
+                React.createElement('div', { style:{ fontSize:10, color:'#22c55e', opacity:.7, letterSpacing:'0.1em', marginBottom:4 } }, 'NETO A PAGAR'),
+                React.createElement('div', { style:{ fontSize:28, fontWeight:900, color:'#22c55e', fontFamily:'monospace' } }, (snap.currency||'MXN') + ' $' + fmtD(snap.net)),
+                React.createElement('div', { style:{ fontSize:10, color:'#555', marginTop:4 } }, 'Tasa efectiva: ' + (snap.effectiveRate||'0') + '%'))));
+};
+
+const EmployeeRecibos = ({ db, emp }) => {
+    const [selRecibo, setSelRecibo] = React.useState(null);
+
+    // Find last 4 payroll cuts where this employee appears
+    const myRecibos = React.useMemo(() => {
+        const cuts = (db&&db.payrollCuts)||[];
+        const result = [];
+        for (const cut of cuts) {
+            const snap = (cut.empSnapshot||[]).find(s => s.id === emp.id);
+            if (snap) result.push({ cut, snap });
+            if (result.length >= 4) break;
+        }
+        return result;
+    }, [db, emp.id]);
+
+    if (myRecibos.length === 0) return React.createElement('div', { style:{ marginTop:20, padding:'16px 18px', background:'#1a1a2e', border:'1px solid #334', borderRadius:8 } },
+        React.createElement('div', { style:{ fontFamily:'monospace', fontSize:9, color:'#555', letterSpacing:'0.1em', marginBottom:6 } }, 'MIS RECIBOS DE NÓMINA'),
+        React.createElement('div', { style:{ fontFamily:'monospace', fontSize:11, color:'#666', textAlign:'center', padding:12 } }, 'Sin recibos disponibles aún'));
+
+    return React.createElement('div', { style:{ marginTop:20 } },
+        React.createElement('div', { style:{ fontFamily:'monospace', fontSize:9, color:'#555', letterSpacing:'0.1em', marginBottom:10 } }, 'MIS RECIBOS DE NÓMINA'),
+        React.createElement('div', { style:{ display:'flex', flexDirection:'column', gap:8 } },
+            myRecibos.map(({ cut, snap }, i) => {
+                const fmtD = n => (n||0).toLocaleString('es-MX', {minimumFractionDigits:2, maximumFractionDigits:2});
+                const isClosed = ['dispersado','autorizado','congelado'].includes(cut.status);
+                return React.createElement('div', { key:cut.id, style:{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'12px 16px', background:'#1a1a2e', border:`1px solid ${isClosed?'#22c55e33':'#334'}`, borderRadius:8 } },
+                    React.createElement('div', null,
+                        React.createElement('div', { style:{ fontFamily:'monospace', fontSize:12, fontWeight:700, color:'#fff' } }, cut.period||cut.date||cut.id),
+                        React.createElement('div', { style:{ fontFamily:'monospace', fontSize:9, color:'#666', marginTop:2 } },
+                            (cut.type||'').toUpperCase() + ' · ' + (cut.status||'pendiente').toUpperCase())),
+                    React.createElement('div', { style:{ display:'flex', alignItems:'center', gap:16 } },
+                        React.createElement('div', { style:{ textAlign:'right' } },
+                            React.createElement('div', { style:{ fontFamily:'monospace', fontSize:13, fontWeight:900, color:'#22c55e' } }, '$'+fmtD(snap.net||0)),
+                            React.createElement('div', { style:{ fontFamily:'monospace', fontSize:9, color:'#555' } }, 'neto')),
+                        React.createElement('button', { onClick: () => setSelRecibo({ cut, snap }),
+                            style:{ padding:'7px 14px', background:'#1B3A5C33', border:'1px solid #1B3A5C88', color:'#74c0fc', fontFamily:'monospace', fontSize:10, fontWeight:700, cursor:'pointer', borderRadius:4 } },
+                            '📄 VER')));
+            })),
+        selRecibo && React.createElement(ReciboModal, {
+            snap: selRecibo.snap,
+            cut: selRecibo.cut,
+            company: db&&db.company,
+            onClose: () => setSelRecibo(null)
+        }));
+};
+
 const EmployeePortal = ({ db, session, addTimeRecord, updateTimeRecord, onLogout }) => {
     const { t } = useT();
     const emp = session?.user;
@@ -1548,7 +1745,10 @@ const EmployeePortal = ({ db, session, addTimeRecord, updateTimeRecord, onLogout
                     [t("payroll_type"), payCalc.regime, DS.glow],
                 ].map(([l, v, c]) => (React.createElement("div", { key: l },
                     React.createElement("div", { style: { fontFamily: DS.mono, fontSize: 7, color: DS.textDim } }, l),
-                    React.createElement("div", { style: { fontFamily: DS.mono, fontSize: 12, fontWeight: 800, color: c } }, v))))))));
+                    React.createElement("div", { style: { fontFamily: DS.mono, fontSize: 12, fontWeight: 800, color: c } }, v)))))),
+
+            // ── Recibos de Nómina ─────────────────────────────────
+            React.createElement(EmployeeRecibos, { db, emp })));
 };
 const STORAGE_KEY = "timeclock-v2-data";
 const persist = (data) => {
