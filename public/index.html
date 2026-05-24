@@ -1738,12 +1738,15 @@ const useDB = () => {
         window.TC_API.put( `/api/payroll-cuts/${record.id}`, record).catch(() => {});
     }, [commit]);
 
-    const updatePayrollCut = useCallback((id, patch) => {
+    const updatePayrollCut = useCallback((idOrObj, patch) => {
         const cur = dbRef.current;
+        // Support both updatePayrollCut(id, patch) and updatePayrollCut({...fullObject})
+        const id = typeof idOrObj === 'string' ? idOrObj : idOrObj.id;
+        const updates = typeof idOrObj === 'string' ? patch : idOrObj;
         const existing = cur.payrollCuts.find(c => c.id === id);
-        const merged = existing ? Object.assign({}, existing, patch) : patch;
-        commit(Object.assign({}, cur, { payrollCuts: cur.payrollCuts.map(c => c.id === id ? Object.assign({}, c, patch) : c) }));
-        window.TC_API.put( `/api/payroll-cuts/${id}`, merged).catch(() => {});
+        const merged = existing ? Object.assign({}, existing, updates) : updates;
+        commit(Object.assign({}, cur, { payrollCuts: cur.payrollCuts.map(c => c.id === id ? merged : c) }));
+        window.TC_API.put(`/api/payroll-cuts/${id}`, merged).catch(() => {});
     }, [commit]);
 
     const resetDB = useCallback(() => { commit(SEED); }, [commit]);
