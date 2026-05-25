@@ -50,6 +50,34 @@ async function initDB() {
         data JSONB NOT NULL DEFAULT '{}',
         updated_at TIMESTAMPTZ DEFAULT NOW()
     );
+    CREATE TABLE IF NOT EXISTS job_applications (
+        id TEXT PRIMARY KEY,
+        job_id TEXT NOT NULL,
+        candidate_name TEXT NOT NULL,
+        candidate_email TEXT,
+        status TEXT DEFAULT 'nuevo',
+        cv_data TEXT,
+        ai_score INTEGER,
+        ai_analysis JSONB,
+        interview_slot TEXT,
+        data JSONB NOT NULL DEFAULT '{}',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE TABLE IF NOT EXISTS interview_slots (
+        id TEXT PRIMARY KEY,
+        date DATE NOT NULL,
+        time TEXT NOT NULL,
+        duration_min INTEGER DEFAULT 60,
+        status TEXT DEFAULT 'disponible',
+        job_id TEXT,
+        application_id TEXT,
+        recruiter_note TEXT,
+        data JSONB NOT NULL DEFAULT '{}',
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_slots_date ON interview_slots(date);
+    CREATE INDEX IF NOT EXISTS idx_apps_job   ON job_applications(job_id);
     CREATE INDEX IF NOT EXISTS idx_tr_emp  ON time_records(emp_id);
     CREATE INDEX IF NOT EXISTS idx_tr_date ON time_records(record_date);
   `);
@@ -240,6 +268,153 @@ app.put('/api/company', requireAuth, async (req, res) => {
 app.get('/api/health', async (req, res) => {
   try { await pool.query('SELECT 1'); res.json({ ok: true, ts: new Date().toISOString() }); }
   catch { res.status(503).json({ ok: false }); }
+});
+
+// ── INTERVIEW SLOTS ───────────────────────────────────────────────────
+// Public: get available slots
+app.get('/api/slots/available', async (req, res) => {
+  try {
+    const r = await pool.query(
+      "SELECT * FROM interview_slots WHERE status='disponible' AND date >= CURRENT_DATE ORDER BY date, time"
+    );
+    res.json(r.rows);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// Admin: get all slots
+app.get('/api/slots', requireAuth, async (req, res) => {
+  try {
+    const r = await pool.query('SELECT * FROM interview_slots ORDER BY date, time');
+    res.json(r.rows);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.put('/api/slots/:id', requireAuth, async (req, res) => {
+  const { id } = req.params;
+  const { date, time, duration_min, status, job_id, application_id, recruiter_note, data } = req.body;
+  try {
+    await pool.query(`INSERT INTO interview_slots(id,date,time,duration_min,status,job_id,application_id,recruiter_note,data)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)
+      ON CONFLICT(id) DO UPDATE SET date=$2,time=$3,duration_min=$4,status=$5,job_id=$6,application_id=$7,recruiter_note=$8,data=$9,updated_at=NOW()`,
+      [id, date, time, duration_min||60, status||'disponible', job_id||null, application_id||null, recruiter_note||null, JSON.stringify(data||{})]);
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.delete('/api/slots/:id', requireAuth, async (req, res) => {
+  await pool.query('DELETE FROM interview_slots WHERE id=$1', [req.params.id]);
+  res.json({ ok: true });
+});
+
+// ── JOB APPLICATIONS ─────────────────────────────────────────────────
+// Public: submit application
+app.post('/api/applications', async (req, res) => {
+  const { id, job_id, candidate_name, candidate_email, interview_slot, cv_data, data } = req.body;
+  if (!job_id || !candidate_name) return res.status(400).json({ error: 'Missing required fields' });
+  try {
+    const appId = id || ('app' + Date.now());
+    await pool.query(`INSERT INTO job_applications(id,job_id,candidate_name,candidate_email,status,cv_data,interview_slot,data)
+      VALUES($1,$2,$3,$4,'nuevo',$5,$6,$7)`,
+      [appId, job_id, candidate_name, candidate_email||'', cv_data||null, interview_slot||null, JSON.stringify(data||{})]);
+    // Block the slot
+    if (interview_slot) {
+      await pool.query("UPDATE interview_slots SET status='ocupado', application_id=$1 WHERE id=$2",
+        [appId, interview_slot]);
+    }
+    console.log('[application] new:', candidate_name, 'for job:', job_id);
+    res.json({ ok: true, id: appId });
+  } catch(e) { console.error('[application]', e.message); res.status(500).json({ error: e.message }); }
+});
+
+// Admin: get all applications
+app.get('/api/applications', requireAuth, async (req, res) => {
+  try {
+    const r = await pool.query('SELECT * FROM job_applications ORDER BY created_at DESC');
+    res.json(r.rows);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// Admin: get applications for a job
+app.get('/api/applications/job/:jobId', requireAuth, async (req, res) => {
+  try {
+    const r = await pool.query('SELECT * FROM job_applications WHERE job_id=$1 ORDER BY created_at DESC', [req.params.jobId]);
+    res.json(r.rows);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// Admin: update application (status, ai_score, ai_analysis)
+app.put('/api/applications/:id', requireAuth, async (req, res) => {
+  const { id } = req.params;
+  const { status, ai_score, ai_analysis, data } = req.body;
+  try {
+    await pool.query(`UPDATE job_applications SET status=COALESCE($2,status),
+      ai_score=COALESCE($3,ai_score), ai_analysis=COALESCE($4,ai_analysis),
+      data=COALESCE($5,data), updated_at=NOW() WHERE id=$1`,
+      [id, status||null, ai_score||null, ai_analysis ? JSON.stringify(ai_analysis) : null,
+       data ? JSON.stringify(data) : null]);
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+// Admin: AI analysis proxy — calls Anthropic API server-side (keeps API key secure)
+app.post('/api/applications/:id/analyze', requireAuth, async (req, res) => {
+  const { id } = req.params;
+  const { cv_text, job_description, job_title } = req.body;
+  if (!cv_text) return res.status(400).json({ error: 'CV text required' });
+  try {
+    const prompt = `Eres un experto en recursos humanos. Analiza el siguiente CV para el puesto de "${job_title||'No especificado'}".
+
+DESCRIPCIÓN DEL PUESTO:
+${job_description||'No especificada'}
+
+CONTENIDO DEL CV:
+${cv_text.slice(0,4000)}
+
+Responde ÚNICAMENTE con JSON válido (sin markdown, sin texto extra):
+{
+  "score": 75,
+  "resumen": "Breve resumen del candidato en 2-3 oraciones",
+  "escolaridad": { "nivel": "Licenciatura", "area": "Ingeniería", "score": 80, "notas": "..." },
+  "experiencia": { "anios": 5, "relevancia": "alta", "score": 85, "notas": "..." },
+  "habilidades": { "tecncias": ["skill1","skill2"], "blandas": ["skill3"], "score": 70, "notas": "..." },
+  "referencias": { "tiene": true, "score": 60, "notas": "..." },
+  "fortalezas": ["fortaleza1","fortaleza2","fortaleza3"],
+  "areas_mejora": ["area1","area2"],
+  "recomendacion": "contratar|considerar|rechazar",
+  "justificacion": "Razón de la recomendación en 2-3 oraciones"
+}`;
+
+    const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': process.env.ANTHROPIC_API_KEY || '',
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1500,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+    });
+
+    if (!aiRes.ok) throw new Error('AI API error: ' + aiRes.status);
+    const aiData = await aiRes.json();
+    const text = (aiData.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('No JSON in AI response');
+    const analysis = JSON.parse(jsonMatch[0]);
+
+    // Save to DB
+    await pool.query('UPDATE job_applications SET ai_score=$2, ai_analysis=$3, updated_at=NOW() WHERE id=$1',
+      [id, analysis.score||0, JSON.stringify(analysis)]);
+
+    console.log('[ai-analysis]', id, 'score:', analysis.score, 'rec:', analysis.recomendacion);
+    res.json({ ok: true, analysis });
+  } catch(e) {
+    console.error('[ai-analysis]', e.message);
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // ── FISCAL PERIODS ────────────────────────────────────────────────────
