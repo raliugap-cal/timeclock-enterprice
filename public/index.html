@@ -11877,7 +11877,7 @@ const AgendaReclutador = ({ db, vacancies }) => {
 
     React.useEffect(() => { loadData(); }, []);
 
-    const fmt = d => new Date(d+'T00:00:00').toLocaleDateString('es-MX',{weekday:'short',day:'numeric',month:'short'});
+    const fmt = d => new Date((d||'').slice(0,10)+'T00:00:00').toLocaleDateString('es-MX',{weekday:'short',day:'numeric',month:'short'});
 
     // Generate next 30 days for calendar
     const days = Array.from({length:30},(_,i)=>{
@@ -11885,7 +11885,8 @@ const AgendaReclutador = ({ db, vacancies }) => {
         return d.toISOString().slice(0,10);
     });
 
-    const slotsForDay = day => (slots||[]).filter(s=>s.date===day);
+    const normalizeDate = d => (d||'').slice(0,10);
+    const slotsForDay = day => (slots||[]).filter(s => normalizeDate(s.date) === day);
     const appForSlot  = slot => (apps||[]).find(a=>a.id===slot.application_id);
     const vacForSlot  = slot => vacancies.find(v=>v.id===slot.job_id);
 
