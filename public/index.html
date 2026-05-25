@@ -42,6 +42,17 @@ window.TC_API = (function() {
         saveFiscalPeriod:  (id, data) => api('PUT', `/api/fiscal-periods/${id}`, data),
         closeFiscalPeriod: (id) => api('POST', `/api/fiscal-periods/${id}/close`, {}),
         activeEmps: () => api('GET', '/api/employees/active'),
+        // Job applications
+        getApplications:    ()        => api('GET',  '/api/applications'),
+        getApplicationsJob: (jobId)   => api('GET',  `/api/applications/job/${jobId}`),
+        submitApplication:  (data)    => api('POST', '/api/applications', data),
+        updateApplication:  (id,data) => api('PUT',  `/api/applications/${id}`, data),
+        analyzeCV:          (id,data) => api('POST', `/api/applications/${id}/analyze`, data),
+        // Interview slots
+        getSlots:           ()        => api('GET',  '/api/slots'),
+        getAvailableSlots:  ()        => api('GET',  '/api/slots/available'),
+        saveSlot:           (id,data) => api('PUT',  `/api/slots/${id}`, data),
+        deleteSlot:         (id)      => api('DELETE',`/api/slots/${id}`),
         put:      (url, data) => api('PUT',    url, data),
         del:      (url)       => api('DELETE', url),
         post:     (url, data) => api('POST',   url, data),
@@ -11540,10 +11551,39 @@ const JobApplyWizard = ({ vacancy, onClose, onSubmit, t }) => {
     const [form, setForm] = useState({
         contact: { fullName:"", email:"", phone:"", city:"", country:"México", linkedin:"", portfolio:"" },
         questions: { why:"", experience:"", available:"", salary:"", relocation:false, remote:false, languages:"" },
-        schedule: { date:"", time:"09:00", timezone:"America/Mexico_City", format:"online", notes:"" },
+        schedule: { date:"", time:"", timezone:"America/Mexico_City", format:"online", notes:"", slotId:"" },
         jobs: [], education: [], references: [], confirmed: false,
+        cv_data: null, cv_name: null,
     });
     const [submitted, setSubmitted] = useState(false);
+    const [availableSlots, setAvailableSlots] = useState([]);
+    const [cvLoading, setCvLoading] = useState(false);
+
+    // Load available slots on mount
+    React.useEffect(() => {
+        if (window.TC_API && window.TC_API.IS_SERVER) {
+            window.TC_API.getAvailableSlots()
+                .then(slots => setAvailableSlots(slots.filter(s => !vacancy || !s.job_id || s.job_id === vacancy.id)))
+                .catch(() => setAvailableSlots([]));
+        }
+    }, []);
+
+    const handleCVUpload = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        if (file.type !== 'application/pdf') { alert('Solo se aceptan archivos PDF'); return; }
+        if (file.size > 5 * 1024 * 1024) { alert('El archivo no debe superar 5MB'); return; }
+        setCvLoading(true);
+        const reader = new FileReader();
+        reader.onload = ev => {
+            // Store as base64 for analysis
+            const base64 = ev.target.result.split(',')[1];
+            setForm(f => ({ ...f, cv_data: base64, cv_name: file.name }));
+            setCvLoading(false);
+        };
+        reader.readAsDataURL(file);
+    };
+
     const upd = (sec, k, v) => setForm(f => ({ ...f, [sec]: { ...f[sec], [k]: v } }));
     const addJob = () => setForm(f => ({ ...f, jobs: [...f.jobs, { company:"", position:"", start:"", end:"", current:false, duties:"", reason:"" }] }));
     const updJob = (i,k,v) => setForm(f => ({ ...f, jobs: f.jobs.map((j,idx) => idx===i ? {...j,[k]:v} : j) }));
@@ -11557,11 +11597,35 @@ const JobApplyWizard = ({ vacancy, onClose, onSubmit, t }) => {
     const canNext = () => {
         if (step===0) return form.contact.fullName && form.contact.email && form.contact.phone && form.contact.city;
         if (step===1) return form.questions.why && form.questions.experience && form.questions.available;
-        if (step===2) return form.schedule.date && form.schedule.time;
+        if (step===2) return form.schedule.slotId || (form.schedule.date && form.schedule.time);
         if (step===6) return form.confirmed;
         return true;
     };
-    const doSubmit = () => { setSubmitted(true); onSubmit({ ...form, vacancyId: vacancy.id, submittedAt: new Date().toISOString() }); };
+    const doSubmit = () => {
+        setSubmitted(true);
+        const appData = { ...form, vacancyId: vacancy.id, submittedAt: new Date().toISOString() };
+        // Submit to server if available
+        if (window.TC_API && window.TC_API.IS_SERVER) {
+            const selectedSlot = availableSlots.find(s => s.id === form.schedule.slotId);
+            window.TC_API.submitApplication({
+                job_id: vacancy.id,
+                candidate_name: form.contact.fullName,
+                candidate_email: form.contact.email,
+                interview_slot: form.schedule.slotId || null,
+                cv_data: form.cv_data,
+                data: {
+                    contact: form.contact,
+                    questions: form.questions,
+                    schedule: { ...form.schedule, slotDate: selectedSlot?.date, slotTime: selectedSlot?.time },
+                    jobs: form.jobs,
+                    education: form.education,
+                    references: form.references,
+                    cv_name: form.cv_name,
+                }
+            }).catch(e => console.warn('[apply] server save failed:', e.message));
+        }
+        onSubmit(appData);
+    };
     const inSt = { width:"100%", background:DS.bgAlt, border:`1px solid ${DS.border}`, borderRadius:8, padding:"9px 12px", color:DS.text, fontFamily:DS.mono, fontSize:12, outline:"none" };
     const lbSt = { display:"block", fontFamily:DS.sans, fontSize:11, fontWeight:600, color:DS.textMid, marginBottom:5 };
     const g2 = { display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 };
@@ -11661,17 +11725,44 @@ const JobApplyWizard = ({ vacancy, onClose, onSubmit, t }) => {
                     )
                 ),
                 step===2 && React.createElement("div",{style:g2},
-                    F(t("jobs_s3_date"), form.schedule.date, e=>upd("schedule","date",e.target.value),"date"),
-                    F(t("jobs_s3_time"), form.schedule.time, e=>upd("schedule","time",e.target.value),"time"),
-                    SEL(t("jobs_s3_timezone"), form.schedule.timezone, e=>upd("schedule","timezone",e.target.value),
-                        ["America/Mexico_City","America/New_York","America/Los_Angeles","America/Bogota","America/Lima","America/Buenos_Aires","Europe/Madrid","Europe/Paris","Europe/Berlin","Asia/Tokyo"].map(tz=>[tz,tz])),
-                    React.createElement("div",{style:{marginBottom:14}},
-                        React.createElement("label",{style:lbSt}, t("jobs_s3_format")),
-                        React.createElement("div",{style:{display:"flex",gap:12,marginTop:6}},
-                            [["online",t("jobs_s3_online")],["inperson",t("jobs_s3_inperson")],["phone",t("jobs_s3_phone_int")]].map(([v,l])=>
-                                React.createElement("label",{key:v,style:{display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontFamily:DS.sans,fontSize:12,color:form.schedule.format===v?DS.glow:DS.textMid,fontWeight:form.schedule.format===v?700:400}},
-                                    React.createElement("input",{type:"radio",name:"fmt",checked:form.schedule.format===v,onChange:()=>upd("schedule","format",v)}), l)
-                            ))),
+                    // CV Upload — full width
+                    React.createElement("div",{style:{...full, marginBottom:14}},
+                        React.createElement("label",{style:lbSt}, "📄 Subir CV (PDF, máx 5MB)"),
+                        React.createElement("div",{style:{border:`2px dashed ${DS.border}`, borderRadius:8, padding:20, textAlign:'center', background:DS.surface}},
+                            form.cv_data
+                                ? React.createElement("div",null,
+                                    React.createElement("div",{style:{color:DS.glowGreen,fontSize:13,fontWeight:700,marginBottom:6}}, "✓ "+form.cv_name),
+                                    React.createElement("button",{onClick:()=>setForm(f=>({...f,cv_data:null,cv_name:null})),style:{fontSize:10,background:'transparent',border:`1px solid ${DS.border}`,color:DS.textDim,cursor:'pointer',padding:'4px 10px',borderRadius:4}}, "✕ Quitar CV"))
+                                : cvLoading
+                                    ? React.createElement("div",{style:{color:DS.glow}}, "⏳ Procesando CV...")
+                                    : React.createElement("div",null,
+                                        React.createElement("div",{style:{fontSize:32,marginBottom:8}}, "📄"),
+                                        React.createElement("div",{style:{fontSize:12,color:DS.textDim,marginBottom:12}}, "Arrastra tu CV aquí o haz clic para seleccionar"),
+                                        React.createElement("input",{type:"file",accept:".pdf",onChange:handleCVUpload,style:{fontSize:12,color:DS.text}})))),
+
+                    // Available slots
+                    React.createElement("div",{style:{...full, marginBottom:14}},
+                        React.createElement("label",{style:lbSt}, "📅 Selecciona tu horario de entrevista *"),
+                        availableSlots.length === 0
+                            ? React.createElement("div",{style:{padding:'12px 14px',background:DS.surface,border:`1px solid ${DS.border}`,borderRadius:8,fontSize:11,color:DS.textDim}},
+                                "No hay horarios disponibles en este momento. El reclutador te contactará para agendar.")
+                            : React.createElement("div",{style:{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))',gap:8}},
+                                availableSlots.map(slot => {
+                                    const isSel = form.schedule.slotId === slot.id;
+                                    const d = new Date(slot.date+'T00:00:00').toLocaleDateString('es-MX',{weekday:'short',day:'numeric',month:'short'});
+                                    return React.createElement("div",{key:slot.id,onClick:()=>upd('schedule','slotId',slot.id),style:{
+                                        padding:'10px 12px',borderRadius:8,cursor:'pointer',textAlign:'center',
+                                        background:isSel?`${DS.glowGreen}22`:DS.surface,
+                                        border:`2px solid ${isSel?DS.glowGreen:DS.border}`,
+                                        transition:'all .15s',
+                                    }},
+                                        React.createElement("div",{style:{fontSize:11,fontWeight:700,color:isSel?DS.glowGreen:DS.text}},slot.time),
+                                        React.createElement("div",{style:{fontSize:9,color:DS.textDim,marginTop:2}},d),
+                                        React.createElement("div",{style:{fontSize:9,color:DS.textDim}},slot.duration_min+'min'));
+                                })),
+                        availableSlots.length > 0 && React.createElement("div",{style:{marginTop:8,fontSize:10,color:DS.textDim}},
+                            "¿Ninguno te funciona? Deja una nota abajo.")),
+
                     React.createElement("div",{style:{...full,marginBottom:14}},
                         React.createElement("label",{style:lbSt}, t("jobs_s3_notes")),
                         React.createElement("textarea",{value:form.schedule.notes,onChange:e=>upd("schedule","notes",e.target.value),rows:3,style:{...inSt,resize:"vertical"}}))
@@ -11763,6 +11854,287 @@ const JobApplyWizard = ({ vacancy, onClose, onSubmit, t }) => {
     );
 };
 
+
+// ══════════════════════════════════════════════════════════════════════
+//  AGENDA DEL RECLUTADOR — Slots + Análisis IA de CV
+// ══════════════════════════════════════════════════════════════════════
+const AgendaReclutador = ({ db, vacancies }) => {
+    const [slots, setSlots]     = React.useState(null);
+    const [apps, setApps]       = React.useState(null);
+    const [selDate, setSelDate] = React.useState(new Date().toISOString().slice(0,10));
+    const [selApp, setSelApp]   = React.useState(null);
+    const [aiLoading, setAiLoading] = React.useState(false);
+    const [aiResult, setAiResult]   = React.useState(null);
+    const [newSlot, setNewSlot]     = React.useState(null);
+    const [slotForm, setSlotForm]   = React.useState({ time:'09:00', duration_min:60, job_id:'' });
+    const [msg, setMsg] = React.useState(null);
+
+    const loadData = () => {
+        if (!window.TC_API || !window.TC_API.IS_SERVER) return;
+        window.TC_API.getSlots().then(setSlots).catch(()=>setSlots([]));
+        window.TC_API.getApplications().then(setApps).catch(()=>setApps([]));
+    };
+
+    React.useEffect(() => { loadData(); }, []);
+
+    const fmt = d => new Date(d+'T00:00:00').toLocaleDateString('es-MX',{weekday:'short',day:'numeric',month:'short'});
+
+    // Generate next 30 days for calendar
+    const days = Array.from({length:30},(_,i)=>{
+        const d = new Date(); d.setDate(d.getDate()+i);
+        return d.toISOString().slice(0,10);
+    });
+
+    const slotsForDay = day => (slots||[]).filter(s=>s.date===day);
+    const appForSlot  = slot => (apps||[]).find(a=>a.id===slot.application_id);
+    const vacForSlot  = slot => vacancies.find(v=>v.id===slot.job_id);
+
+    const handleAddSlot = () => {
+        if (!slotForm.time) return;
+        const id = 'slot'+Date.now();
+        window.TC_API.saveSlot(id, { date:selDate, ...slotForm, status:'disponible' })
+            .then(()=>{ loadData(); setNewSlot(false); setMsg({type:'ok',text:'Slot creado'}); setTimeout(()=>setMsg(null),3000); })
+            .catch(e=>setMsg({type:'err',text:e.message}));
+    };
+
+    const handleDeleteSlot = (slotId) => {
+        if (!window.confirm('¿Eliminar este slot?')) return;
+        window.TC_API.deleteSlot(slotId).then(()=>loadData());
+    };
+
+    const handleAnalyzeCV = async (app) => {
+        if (!app.cv_data) { setMsg({type:'err',text:'El candidato no subió CV'}); return; }
+        setAiLoading(true); setAiResult(null);
+        try {
+            const vac = vacancies.find(v=>v.id===app.job_id)||{};
+            const res = await window.TC_API.analyzeCV(app.id, {
+                cv_text: app.cv_data,
+                job_title: vac.title||'No especificado',
+                job_description: (vac.description||'') + '\nRequisitos: ' + (vac.requirements||''),
+            });
+            setAiResult(res.analysis);
+            loadData();
+        } catch(e) { setMsg({type:'err',text:'Error al analizar CV: '+e.message}); }
+        setAiLoading(false);
+    };
+
+    const scoreColor = s => s>=80?'#22c55e':s>=60?'#ffa94d':'#ff6b6b';
+    const recBadge = r => { const b = {contratar:{c:'#22c55e',bg:'#22c55e22',l:'✓ CONTRATAR'},considerar:{c:'#ffa94d',bg:'#ffa94d22',l:'⚠ CONSIDERAR'},rechazar:{c:'#ff6b6b',bg:'#ff6b6b22',l:'✗ RECHAZAR'}}; return b[r]||{c:'#aaa',bg:'#aaa22',l:r||'—'}; };
+
+    if (!slots) return React.createElement('div', { style:{padding:40,textAlign:'center',color:'#aaa',fontFamily:'monospace'} }, '⏳ Cargando agenda...');
+
+    return React.createElement('div', { style:{fontFamily:'monospace'} },
+        // Message
+        msg && React.createElement('div', { style:{marginBottom:12, padding:'10px 14px',
+            background: msg.type==='ok'?'#22c55e22':'#ff6b6b22',
+            border:`1px solid ${msg.type==='ok'?'#22c55e44':'#ff6b6b44'}`,
+            color: msg.type==='ok'?'#22c55e':'#ff6b6b', fontSize:12} }, msg.text),
+
+        React.createElement('div', { style:{display:'grid', gridTemplateColumns:'280px 1fr', gap:20} },
+
+            // ── LEFT: Calendar strip ─────────────────────────────────
+            React.createElement('div', null,
+                React.createElement('div', { style:{fontSize:11, color:'#555', letterSpacing:'0.1em', marginBottom:12} }, 'SELECCIONAR FECHA'),
+                React.createElement('div', { style:{display:'flex', flexDirection:'column', gap:4, maxHeight:600, overflowY:'auto'} },
+                    days.map(day => {
+                        const daySl = slotsForDay(day);
+                        const hasOcu = daySl.some(s=>s.status==='ocupado');
+                        const hasDisp = daySl.some(s=>s.status==='disponible');
+                        const isToday = day === new Date().toISOString().slice(0,10);
+                        const isSel = day === selDate;
+                        return React.createElement('div', { key:day, onClick:()=>setSelDate(day),
+                            style:{
+                                display:'flex', alignItems:'center', justifyContent:'space-between',
+                                padding:'10px 14px', borderRadius:8, cursor:'pointer',
+                                background: isSel ? '#1B3A5C' : '#1a1a2e',
+                                border: `1px solid ${isSel?'#74c0fc88':isToday?'#ffa94d44':'#334'}`,
+                                transition:'all .15s',
+                            }},
+                            React.createElement('div', null,
+                                React.createElement('div', { style:{fontSize:11, fontWeight:isSel?900:600, color:isSel?'#74c0fc':isToday?'#ffa94d':'#aaa'} }, fmt(day)),
+                                React.createElement('div', { style:{fontSize:9, color:'#555', marginTop:1} }, isToday?'HOY':''),
+                            ),
+                            React.createElement('div', { style:{display:'flex', gap:4} },
+                                daySl.length > 0 && React.createElement('span', { style:{fontSize:9, padding:'2px 6px', background:'#334', color:'#aaa', borderRadius:10} }, daySl.length+'sl'),
+                                hasOcu && React.createElement('span', { style:{fontSize:9, padding:'2px 6px', background:'#22c55e22', color:'#22c55e', borderRadius:10} }, '✓'),
+                                hasDisp && React.createElement('span', { style:{fontSize:9, padding:'2px 6px', background:'#74c0fc22', color:'#74c0fc', borderRadius:10} }, 'libre')));
+                    }))),
+
+            // ── RIGHT: Day detail ────────────────────────────────────
+            React.createElement('div', null,
+                // Day header
+                React.createElement('div', { style:{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16} },
+                    React.createElement('div', null,
+                        React.createElement('div', { style:{fontSize:16, fontWeight:900, color:'#fff'} }, fmt(selDate)),
+                        React.createElement('div', { style:{fontSize:10, color:'#555'} }, slotsForDay(selDate).length + ' slots configurados')),
+                    React.createElement('button', { onClick:()=>setNewSlot(true),
+                        style:{padding:'8px 16px', background:'#22c55e22', border:'1px solid #22c55e66', color:'#22c55e', fontFamily:'monospace', fontSize:10, fontWeight:700, cursor:'pointer', borderRadius:6} },
+                        '+ AGREGAR SLOT')),
+
+                // New slot form
+                newSlot && React.createElement('div', { style:{background:'#1a1a2e', border:'1px solid #334', borderRadius:8, padding:16, marginBottom:16} },
+                    React.createElement('div', { style:{fontSize:10, color:'#74c0fc', fontWeight:700, marginBottom:12} }, '📅 Nuevo slot — ' + fmt(selDate)),
+                    React.createElement('div', { style:{display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:12, marginBottom:12} },
+                        React.createElement('div', null,
+                            React.createElement('div', { style:{fontSize:9, color:'#555', marginBottom:4} }, 'HORA'),
+                            React.createElement('input', { type:'time', value:slotForm.time, onChange:e=>setSlotForm({...slotForm,time:e.target.value}),
+                                style:{width:'100%', padding:'7px 10px', background:'#0a0a1e', border:'1px solid #334', color:'#fff', fontFamily:'monospace', fontSize:12, boxSizing:'border-box'} })),
+                        React.createElement('div', null,
+                            React.createElement('div', { style:{fontSize:9, color:'#555', marginBottom:4} }, 'DURACIÓN'),
+                            React.createElement('select', { value:slotForm.duration_min, onChange:e=>setSlotForm({...slotForm,duration_min:Number(e.target.value)}),
+                                style:{width:'100%', padding:'7px 10px', background:'#0a0a1e', border:'1px solid #334', color:'#fff', fontFamily:'monospace', fontSize:11} },
+                                [30,45,60,90].map(m=>React.createElement('option',{key:m,value:m},m+' min')))),
+                        React.createElement('div', null,
+                            React.createElement('div', { style:{fontSize:9, color:'#555', marginBottom:4} }, 'VACANTE (opcional)'),
+                            React.createElement('select', { value:slotForm.job_id, onChange:e=>setSlotForm({...slotForm,job_id:e.target.value}),
+                                style:{width:'100%', padding:'7px 10px', background:'#0a0a1e', border:'1px solid #334', color:'#fff', fontFamily:'monospace', fontSize:11} },
+                                React.createElement('option',{value:''},'— Todas las vacantes'),
+                                vacancies.filter(v=>v.status==='open').map(v=>React.createElement('option',{key:v.id,value:v.id},v.title))))),
+                    React.createElement('div', { style:{display:'flex', gap:8} },
+                        React.createElement('button', { onClick:handleAddSlot,
+                            style:{padding:'8px 18px', background:'#22c55e22', border:'1px solid #22c55e66', color:'#22c55e', fontFamily:'monospace', fontSize:10, fontWeight:700, cursor:'pointer'} },
+                            '✓ GUARDAR SLOT'),
+                        React.createElement('button', { onClick:()=>setNewSlot(false),
+                            style:{padding:'8px 14px', background:'transparent', border:'1px solid #334', color:'#555', fontFamily:'monospace', fontSize:10, cursor:'pointer'} },
+                            'Cancelar'))),
+
+                // Slots of the day
+                slotsForDay(selDate).length === 0
+                    ? React.createElement('div', { style:{padding:32, textAlign:'center', color:'#555', border:'1px dashed #334', borderRadius:8} },
+                        React.createElement('div', { style:{fontSize:32, marginBottom:8} }, '📅'),
+                        React.createElement('div', { style:{fontSize:11} }, 'Sin slots configurados para este día'),
+                        React.createElement('div', { style:{fontSize:10, color:'#444', marginTop:4} }, 'Haz clic en "+ AGREGAR SLOT" para configurar disponibilidad'))
+                    : React.createElement('div', { style:{display:'flex', flexDirection:'column', gap:10} },
+                        slotsForDay(selDate).sort((a,b)=>a.time.localeCompare(b.time)).map(slot => {
+                            const app = appForSlot(slot);
+                            const vac = vacForSlot(slot);
+                            const isOcu = slot.status === 'ocupado';
+                            return React.createElement('div', { key:slot.id,
+                                style:{
+                                    display:'flex', alignItems:'flex-start', gap:14,
+                                    padding:'14px 16px', borderRadius:10,
+                                    background: isOcu ? '#0d2a1a' : '#1a1a2e',
+                                    border:`2px solid ${isOcu?'#22c55e44':'#334'}`,
+                                    cursor: app ? 'pointer' : 'default',
+                                },
+                                onClick: () => app && setSelApp(selApp&&selApp.id===app.id?null:{...app,slot})
+                            },
+                                // Time badge
+                                React.createElement('div', { style:{
+                                    minWidth:60, textAlign:'center', padding:'8px 6px',
+                                    background: isOcu?'#22c55e22':'#1B3A5C44',
+                                    border:`1px solid ${isOcu?'#22c55e44':'#334'}`,
+                                    borderRadius:6,
+                                }},
+                                    React.createElement('div', { style:{fontSize:14, fontWeight:900, color: isOcu?'#22c55e':'#74c0fc'} }, slot.time),
+                                    React.createElement('div', { style:{fontSize:8, color:'#555', marginTop:2} }, slot.duration_min+'min')),
+                                // Content
+                                React.createElement('div', { style:{flex:1} },
+                                    isOcu && app
+                                        ? React.createElement('div', null,
+                                            React.createElement('div', { style:{fontSize:13, fontWeight:700, color:'#fff'} }, app.candidate_name),
+                                            React.createElement('div', { style:{fontSize:10, color:'#888', marginTop:2} }, app.candidate_email||'—'),
+                                            React.createElement('div', { style:{display:'flex', gap:8, marginTop:6, flexWrap:'wrap'} },
+                                                vac && React.createElement('span', { style:{fontSize:9, padding:'2px 8px', background:'#1B3A5C44', border:'1px solid #334', color:'#74c0fc'} }, vac.title),
+                                                app.ai_score && React.createElement('span', { style:{fontSize:9, padding:'2px 8px', background:`${scoreColor(app.ai_score)}22`, border:`1px solid ${scoreColor(app.ai_score)}44`, color:scoreColor(app.ai_score), fontWeight:700} }, '🤖 '+app.ai_score+'/100'),
+                                                React.createElement('span', { style:{fontSize:9, padding:'2px 8px', background:'#334', color:'#aaa'} }, app.cv_data?'📄 CV':'')))
+                                        : React.createElement('div', { style:{fontSize:11, color:'#555'} }, 
+                                            React.createElement('span', { style:{color:'#22c55e', fontWeight:700} }, 'DISPONIBLE'),
+                                            vac && React.createElement('span', { style:{color:'#444', marginLeft:8} }, '— '+vac.title))),
+                                // Actions
+                                React.createElement('div', { style:{display:'flex', gap:6} },
+                                    isOcu && app && !app.ai_score && app.cv_data && React.createElement('button', {
+                                        onClick: e => { e.stopPropagation(); handleAnalyzeCV(app); },
+                                        style:{padding:'5px 10px', background:'#7c3aed22', border:'1px solid #7c3aed66', color:'#a78bfa', fontFamily:'monospace', fontSize:9, fontWeight:700, cursor:'pointer'} },
+                                        '🤖 ANALIZAR'),
+                                    !isOcu && React.createElement('button', {
+                                        onClick: e => { e.stopPropagation(); handleDeleteSlot(slot.id); },
+                                        style:{padding:'5px 10px', background:'transparent', border:'1px solid #ff6b6b33', color:'#ff6b6b', fontFamily:'monospace', fontSize:9, cursor:'pointer'} },
+                                        '✕')));
+                        })),
+
+                // ── AI Analysis loading ──────────────────────────────
+                aiLoading && React.createElement('div', { style:{marginTop:16, padding:'20px', background:'#1a1a2e', border:'1px solid #7c3aed66', borderRadius:8, textAlign:'center'} },
+                    React.createElement('div', { style:{fontSize:32, marginBottom:8} }, '🤖'),
+                    React.createElement('div', { style:{fontSize:12, color:'#a78bfa', fontWeight:700} }, 'Analizando CV con IA...'),
+                    React.createElement('div', { style:{fontSize:10, color:'#555', marginTop:4} }, 'Evaluando escolaridad, experiencia y referencias')),
+
+                // ── Application detail panel ─────────────────────────
+                selApp && React.createElement('div', { style:{marginTop:20, background:'#1a1a2e', border:'1px solid #334', borderRadius:10, overflow:'hidden'} },
+                    // Header
+                    React.createElement('div', { style:{background:'#1B3A5C', padding:'14px 18px', display:'flex', justifyContent:'space-between', alignItems:'center'} },
+                        React.createElement('div', null,
+                            React.createElement('div', { style:{fontSize:14, fontWeight:900, color:'#fff'} }, selApp.candidate_name),
+                            React.createElement('div', { style:{fontSize:10, color:'#94a3b8'} }, selApp.candidate_email)),
+                        React.createElement('div', { style:{display:'flex', gap:8} },
+                            !selApp.ai_score && selApp.cv_data && React.createElement('button', {
+                                onClick: () => handleAnalyzeCV(selApp),
+                                style:{padding:'7px 14px', background:'#7c3aed33', border:'1px solid #7c3aed88', color:'#a78bfa', fontFamily:'monospace', fontSize:10, fontWeight:700, cursor:'pointer'} },
+                                '🤖 ANALIZAR CV'),
+                            React.createElement('button', { onClick:()=>setSelApp(null),
+                                style:{padding:'7px 12px', background:'transparent', border:'1px solid #334', color:'#888', fontFamily:'monospace', fontSize:12, cursor:'pointer'} }, '✕'))),
+
+                    React.createElement('div', { style:{padding:18} },
+                        // AI Result
+                        (selApp.ai_score || aiResult) && (() => {
+                            const a = aiResult || (typeof selApp.ai_analysis === 'string' ? JSON.parse(selApp.ai_analysis||'{}') : selApp.ai_analysis) || {};
+                            const score = a.score || selApp.ai_score || 0;
+                            const rec = recBadge(a.recomendacion);
+                            return React.createElement('div', null,
+                                // Score + recommendation
+                                React.createElement('div', { style:{display:'flex', gap:16, marginBottom:16, alignItems:'center'} },
+                                    React.createElement('div', { style:{
+                                        width:80, height:80, borderRadius:'50%', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
+                                        background:`conic-gradient(${scoreColor(score)} ${score*3.6}deg, #334 0deg)`,
+                                        boxShadow:`0 0 20px ${scoreColor(score)}44`,
+                                    }},
+                                        React.createElement('div', { style:{width:66, height:66, borderRadius:'50%', background:'#1a1a2e', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center'} },
+                                            React.createElement('div', { style:{fontSize:20, fontWeight:900, color:scoreColor(score)} }, score),
+                                            React.createElement('div', { style:{fontSize:8, color:'#555'} }, '/100'))),
+                                    React.createElement('div', null,
+                                        React.createElement('div', { style:{fontSize:10, color:'#555', marginBottom:6} }, 'RECOMENDACIÓN'),
+                                        React.createElement('div', { style:{padding:'6px 14px', background:rec.bg, border:`1px solid ${rec.c}44`, color:rec.c, fontWeight:900, fontSize:12, display:'inline-block', borderRadius:4} }, rec.l),
+                                        a.resumen && React.createElement('div', { style:{fontSize:11, color:'#aaa', marginTop:8, maxWidth:400, lineHeight:1.5} }, a.resumen))),
+
+                                // Score breakdown
+                                React.createElement('div', { style:{display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:8, marginBottom:16} },
+                                    [
+                                        {l:'Escolaridad',  s:a.escolaridad?.score,  d:a.escolaridad?.nivel},
+                                        {l:'Experiencia',  s:a.experiencia?.score,  d:(a.experiencia?.anios||0)+'años'},
+                                        {l:'Habilidades',  s:a.habilidades?.score,  d:a.habilidades?.tecncias?.slice(0,2).join(', ')},
+                                        {l:'Referencias',  s:a.referencias?.score,  d:a.referencias?.tiene?'Tiene':'Sin refs'},
+                                    ].map(k=>React.createElement('div', { key:k.l, style:{background:'#12122a', border:'1px solid #334', padding:'10px 12px', borderRadius:6} },
+                                        React.createElement('div', { style:{fontSize:8, color:'#555', marginBottom:4} }, k.l),
+                                        React.createElement('div', { style:{fontSize:16, fontWeight:900, color:scoreColor(k.s||0)} }, k.s||'—'),
+                                        React.createElement('div', { style:{fontSize:9, color:'#555', marginTop:2} }, k.d||'')))),
+
+                                // Strengths & areas
+                                a.fortalezas?.length > 0 && React.createElement('div', { style:{marginBottom:12} },
+                                    React.createElement('div', { style:{fontSize:9, color:'#22c55e', fontWeight:700, marginBottom:6} }, '✓ FORTALEZAS'),
+                                    React.createElement('div', { style:{display:'flex', gap:6, flexWrap:'wrap'} },
+                                        a.fortalezas.map(f=>React.createElement('span', {key:f, style:{fontSize:10, padding:'3px 10px', background:'#22c55e18', border:'1px solid #22c55e44', color:'#22c55e', borderRadius:20}}, f)))),
+                                a.areas_mejora?.length > 0 && React.createElement('div', { style:{marginBottom:12} },
+                                    React.createElement('div', { style:{fontSize:9, color:'#ffa94d', fontWeight:700, marginBottom:6} }, '⚠ ÁREAS DE MEJORA'),
+                                    React.createElement('div', { style:{display:'flex', gap:6, flexWrap:'wrap'} },
+                                        a.areas_mejora.map(f=>React.createElement('span', {key:f, style:{fontSize:10, padding:'3px 10px', background:'#ffa94d18', border:'1px solid #ffa94d44', color:'#ffa94d', borderRadius:20}}, f)))),
+                                a.justificacion && React.createElement('div', { style:{padding:'10px 14px', background:'#12122a', border:'1px solid #334', borderRadius:6, fontSize:11, color:'#aaa', lineHeight:1.6} },
+                                    React.createElement('div', { style:{fontSize:9, color:'#555', marginBottom:4} }, 'JUSTIFICACIÓN IA'),
+                                    a.justificacion));
+                        })(),
+
+                        // No AI yet
+                        !selApp.ai_score && !aiResult && React.createElement('div', { style:{padding:20, textAlign:'center', color:'#555'} },
+                            selApp.cv_data
+                                ? React.createElement('div', null,
+                                    React.createElement('div', { style:{fontSize:32, marginBottom:8} }, '📄'),
+                                    React.createElement('div', { style:{fontSize:11, color:'#aaa', marginBottom:12} }, 'CV disponible — haz clic en "🤖 ANALIZAR CV" para obtener el análisis de IA'),
+                                    React.createElement('div', { style:{fontSize:10, color:'#555'} }, 'Evaluará: escolaridad, experiencia, habilidades y referencias'))
+                                : React.createElement('div', null,
+                                    React.createElement('div', { style:{fontSize:32, marginBottom:8} }, '📭'),
+                                    React.createElement('div', { style:{fontSize:11} }, 'El candidato no subió CV'))))))));
+
+};
+
 const ViewJobs = ({ db }) => {
     const { t } = useT();
     const [vacancies, setVacancies] = useState(() => {
@@ -11781,7 +12153,7 @@ const ViewJobs = ({ db }) => {
     const saveVacs = (list) => { setVacancies(list); try { localStorage.setItem("tc_vacancies", JSON.stringify(list)); } catch(e){} };
     const [applications, setApplications] = useState(() => { try { return JSON.parse(localStorage.getItem("tc_applications") || "[]"); } catch(e) { return []; } });
     const saveApps = (list) => { setApplications(list); try { localStorage.setItem("tc_applications", JSON.stringify(list)); } catch(e){} };
-    const [mode, setMode] = useState("board");
+    const [mode, setMode] = useState("board"); // board | form | apps | agenda
     const [selVac, setSelVac] = useState(null);
     const [vacForm, setVacForm] = useState({});
     const [filterCntry, setFilterCntry] = useState("all");
@@ -11871,6 +12243,15 @@ const ViewJobs = ({ db }) => {
         }
     };
     const lbSt = { display:"block", fontFamily:DS.sans, fontSize:11, fontWeight:600, color:DS.textMid, marginBottom:5 };
+
+    // AGENDA VIEW
+    if (mode==="agenda") {
+        return React.createElement("div",null,
+            React.createElement("div",{style:{display:"flex",alignItems:"center",gap:14,marginBottom:24}},
+                React.createElement("button",{onClick:()=>setMode("board"),style:{background:"transparent",border:`1px solid ${DS.border}`,color:DS.textMid,fontFamily:DS.sans,fontSize:12,cursor:"pointer",borderRadius:8,padding:"7px 14px"}}, "← "+t("jobs_title")),
+                React.createElement("div",{style:{fontFamily:DS.sans,fontSize:17,fontWeight:800,color:DS.text}}, "📅 Agenda del Reclutador")),
+            React.createElement(AgendaReclutador, { db, vacancies }));
+    }
 
     // APPS VIEW
     if (mode==="apps" && appsVac) {
@@ -11983,7 +12364,9 @@ const ViewJobs = ({ db }) => {
                 [["open",t("jobs_status_open")],["paused",t("jobs_status_paused")],["closed",t("jobs_status_closed")]].map(([v,l])=>React.createElement("option",{key:v,value:v},l))
             ),
             React.createElement("button",{onClick:openNewVac,style:{display:"flex",alignItems:"center",gap:7,padding:"9px 18px",background:`${DS.glow}20`,border:`1px solid ${DS.glow}55`,color:DS.glow,fontFamily:DS.sans,fontSize:12,fontWeight:700,cursor:"pointer",borderRadius:9,whiteSpace:"nowrap"}},
-                React.createElement(Plus,{size:13}), t("jobs_new_vacancy"))
+                React.createElement(Plus,{size:13}), t("jobs_new_vacancy")),
+            React.createElement("button",{onClick:()=>setMode("agenda"),style:{display:"flex",alignItems:"center",gap:7,padding:"9px 18px",background:`${DS.glowGreen}18`,border:`1px solid ${DS.glowGreen}55`,color:DS.glowGreen,fontFamily:DS.sans,fontSize:12,fontWeight:700,cursor:"pointer",borderRadius:9,whiteSpace:"nowrap"}},
+                React.createElement(Calendar,{size:13}), "📅 AGENDA RECLUTADOR")
         ),
         filtered.length===0
             ? React.createElement("div",{style:{padding:"60px",textAlign:"center",background:DS.surface,border:`1px solid ${DS.border}`,borderRadius:16,fontFamily:DS.sans,fontSize:14,color:DS.textDim}}, t("jobs_no_vacancies"))
