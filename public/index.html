@@ -13387,42 +13387,47 @@ function App() {
 
     const flushLogs = React.useCallback(() => {
         if (!window.TC_API?.IS_SERVER) return;
-        const logs = pendingLogsRef.current.filter(l => l.durationSec > 0);
+        const logs = pendingLogsRef.current.filter(l => l.durationSec >= 0);
         if (logs.length === 0) return;
         pendingLogsRef.current = [];
-        window.TC_API.saveLogs(logs).catch(() => {});
+        console.log('[tracker] flushing', logs.length, 'logs');
+        window.TC_API.saveLogs(logs).catch(e => console.warn('[tracker] flush failed:', e.message));
     }, []);
 
-    const trackViewChange = React.useCallback((newView, session) => {
-        if (!session) return;
+    const trackViewChange = React.useCallback((newView, currentSession) => {
         const prev = viewEntryRef.current;
         const now = Date.now();
         const durationSec = Math.round((now - prev.at) / 1000);
-        if (durationSec > 1) {
-            pendingLogsRef.current.push({
+        const user = currentSession?.user || currentSession;
+        if (user && prev.view !== newView) {
+            const log = {
                 id: 'log_' + prev.at + '_' + Math.random().toString(36).slice(2,7),
-                userId: session.id || session.user?.id,
-                userName: session.name || session.user?.name || 'Unknown',
-                userType: session.type || (session.isEmployee ? 'employee' : 'admin'),
+                userId: user.id || 'unknown',
+                userName: user.name || user.username || 'Unknown',
+                userType: currentSession?.isEmployee ? 'employee' : (user.role || user.type || 'admin'),
                 viewName: prev.view,
                 enteredAt: new Date(prev.at).toISOString(),
                 exitedAt: new Date(now).toISOString(),
                 durationSec,
                 sessionId: prev.sessionId,
                 data: {},
-            });
+            };
+            pendingLogsRef.current.push(log);
+            console.log('[tracker] logged:', prev.view, durationSec+'s', '→', newView);
         }
         viewEntryRef.current = { view: newView, at: now, sessionId: prev.sessionId };
-        // Flush every 5 logs
-        if (pendingLogsRef.current.length >= 5) flushLogs();
+        if (pendingLogsRef.current.length >= 3) flushLogs();
     }, [flushLogs]);
 
     // Flush on page unload
     React.useEffect(() => {
         const handleUnload = () => flushLogs();
         window.addEventListener('beforeunload', handleUnload);
-        // Also flush every 30 seconds
-        const interval = setInterval(flushLogs, 30000);
+        // Flush every 15 seconds
+        const interval = setInterval(flushLogs, 15000);
+        // Expose for manual testing
+        window.__flushLogs = flushLogs;
+        window.__pendingLogs = pendingLogsRef;
         return () => { window.removeEventListener('beforeunload', handleUnload); clearInterval(interval); };
     }, [flushLogs]);
     // ── Global cross-module state ────────────────────────────
