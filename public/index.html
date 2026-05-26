@@ -42,6 +42,10 @@ window.TC_API = (function() {
         saveFiscalPeriod:  (id, data) => api('PUT', `/api/fiscal-periods/${id}`, data),
         closeFiscalPeriod: (id) => api('POST', `/api/fiscal-periods/${id}/close`, {}),
         activeEmps: () => api('GET', '/api/employees/active'),
+        // Session logging
+        saveLogs:    (logs) => api('POST', '/api/session-logs', { logs }),
+        getLogs:     (params) => api('GET', '/api/session-logs?' + new URLSearchParams(params||{}).toString()),
+        getLogsSummary: (params) => api('GET', '/api/session-logs/summary?' + new URLSearchParams(params||{}).toString()),
         // Job applications
         getApplications:    ()        => api('GET',  '/api/applications'),
         getApplicationsJob: (jobId)   => api('GET',  `/api/applications/job/${jobId}`),
@@ -5823,6 +5827,7 @@ const ViewBI = ({ db }) => {
         React.createElement("div", { style: { display: "flex", gap: 0, borderBottom: `1px solid ${DS.border}`, marginBottom: 20 } }, [
             { id: "overview", label: "RESUMEN GENERAL", icon: BarChart2 },
             { id: "nomina", label: "DETALLE DE NÓMINA", icon: DollarSign },
+            { id: "usage", label: "USO POR USUARIO", icon: Activity },
         ].map(t => (React.createElement("button", { key: t.id, onClick: () => setBiTab(t.id), style: { display: "flex", alignItems: "center", gap: 7, padding: "10px 20px", border: "none", cursor: "pointer",
                 background: biTab === t.id ? `${DS.glow}10` : "transparent",
                 color: biTab === t.id ? DS.glow : DS.textDim,
@@ -6351,8 +6356,192 @@ const ViewBI = ({ db }) => {
                     React.createElement("div", { style: { fontFamily: DS.mono, fontSize: 9, color: DS.glowAmber } },
                         nfTotalGross > 0 ? ((nfTotalDed / nfTotalGross) * 100).toFixed(1) : 0,
                         "%"),
-                    React.createElement("div", null)))));
+                    React.createElement("div", null))),
+        biTab === "usage" && React.createElement(ViewUsageReport, null)));
 };
+
+// ══════════════════════════════════════════════════════════════════════
+//  REPORTE DE USO POR USUARIO
+// ══════════════════════════════════════════════════════════════════════
+const ViewUsageReport = () => {
+    const [summary, setSummary] = React.useState(null);
+    const [logs, setLogs]       = React.useState(null);
+    const [selUser, setSelUser] = React.useState(null);
+    const [dateFrom, setDateFrom] = React.useState(() => {
+        const d = new Date(); d.setDate(d.getDate()-30);
+        return d.toISOString().slice(0,10);
+    });
+    const [dateTo, setDateTo] = React.useState(new Date().toISOString().slice(0,10));
+    const [loading, setLoading] = React.useState(false);
+
+    const VIEW_LABELS = {
+        dashboard:'Dashboard', rrhh:'Capital Humano', payroll:'Nómina',
+        time:'Control de Tiempo', jobs:'Bolsa de Trabajo', reports:'Reportes BI',
+        reportes:'Reportes Nómina', dispersion:'Dispersión', calculadora:'Calculadora',
+        permisos:'Permisos', 'base-datos':'Base de Datos',
+    };
+    const viewLabel = v => VIEW_LABELS[v] || v;
+
+    const fmtSec = s => {
+        if (!s) return '—';
+        const h = Math.floor(s/3600); const m = Math.floor((s%3600)/60); const sec = s%60;
+        if (h>0) return `${h}h ${m}m`;
+        if (m>0) return `${m}m ${sec}s`;
+        return `${sec}s`;
+    };
+    const fmtDT = iso => iso ? new Date(iso).toLocaleString('es-MX',{dateStyle:'short',timeStyle:'short'}) : '—';
+
+    const loadData = async () => {
+        if (!window.TC_API?.IS_SERVER) return;
+        setLoading(true);
+        try {
+            const [sum, rawLogs] = await Promise.all([
+                window.TC_API.getLogsSummary({ from: dateFrom+'T00:00:00', to: dateTo+'T23:59:59' }),
+                window.TC_API.getLogs({ from: dateFrom+'T00:00:00', to: dateTo+'T23:59:59', limit: 2000 }),
+            ]);
+            setSummary(sum);
+            setLogs(rawLogs);
+        } catch(e) { console.error('[usage]', e.message); setSummary([]); setLogs([]); }
+        setLoading(false);
+    };
+
+    React.useEffect(() => { loadData(); }, []);
+
+    // Color by user type
+    const typeColor = t => t==='employee' ? DS.glowGreen : t==='admin' ? DS.glow : DS.glowAmber;
+
+    // Get logs for selected user
+    const userLogs = React.useMemo(() => {
+        if (!selUser || !logs) return [];
+        return logs
+            .filter(l => l.user_id === selUser.user_id)
+            .sort((a,b) => new Date(b.entered_at) - new Date(a.entered_at));
+    }, [selUser, logs]);
+
+    // Time by view for selected user
+    const viewTime = React.useMemo(() => {
+        if (!selUser || !logs) return [];
+        const map = {};
+        logs.filter(l => l.user_id === selUser.user_id && l.duration_sec > 0)
+            .forEach(l => { map[l.view_name] = (map[l.view_name]||0) + l.duration_sec; });
+        return Object.entries(map).sort((a,b)=>b[1]-a[1]);
+    }, [selUser, logs]);
+
+    const maxViewTime = viewTime.length > 0 ? viewTime[0][1] : 1;
+
+    if (!summary) return React.createElement('div', {style:{padding:40,textAlign:'center',color:DS.textDim,fontFamily:DS.mono}},
+        '⏳ Cargando datos de uso...');
+
+    return React.createElement('div', {style:{fontFamily:DS.mono}},
+        // Filters
+        React.createElement('div', {style:{display:'flex',gap:12,alignItems:'center',marginBottom:20,flexWrap:'wrap',padding:'12px 16px',background:DS.bgAlt,border:`1px solid ${DS.border}`,borderRadius:8}},
+            React.createElement('span', {style:{fontSize:9,color:DS.textDim,letterSpacing:'0.1em'}}, '🔍 FILTRAR PERÍODO:'),
+            React.createElement('input', {type:'date', value:dateFrom, onChange:e=>setDateFrom(e.target.value),
+                style:{padding:'6px 10px',background:DS.bg,border:`1px solid ${DS.border}`,color:DS.text,fontFamily:DS.mono,fontSize:11}}),
+            React.createElement('span', {style:{color:DS.textDim}}), '→',
+            React.createElement('input', {type:'date', value:dateTo, onChange:e=>setDateTo(e.target.value),
+                style:{padding:'6px 10px',background:DS.bg,border:`1px solid ${DS.border}`,color:DS.text,fontFamily:DS.mono,fontSize:11}}),
+            React.createElement('button', {onClick:loadData,
+                style:{padding:'7px 18px',background:`${DS.glow}18`,border:`1px solid ${DS.glow}55`,color:DS.glow,fontFamily:DS.mono,fontSize:10,fontWeight:700,cursor:'pointer'}},
+                loading ? '⏳' : '▶ APLICAR')),
+
+        summary.length === 0
+            ? React.createElement('div', {style:{padding:40,textAlign:'center',color:DS.textDim}},
+                React.createElement('div', {style:{fontSize:32,marginBottom:12}}, '📊'),
+                React.createElement('div', {style:{fontSize:14,color:DS.text,marginBottom:8}}, 'Sin datos de uso en este período'),
+                React.createElement('div', {style:{fontSize:11,color:DS.textDim}}, 'El sistema registra la navegación automáticamente. Los datos aparecerán después de que los usuarios naveguen entre módulos.'))
+            : React.createElement('div', {style:{display:'grid',gridTemplateColumns: selUser ? '340px 1fr' : '1fr',gap:20}},
+
+                // ── User list ───────────────────────────────────────
+                React.createElement('div', null,
+                    React.createElement('div', {style:{fontSize:9,color:DS.textDim,letterSpacing:'0.1em',marginBottom:10}},
+                        'USUARIOS — ' + summary.length + ' activos en el período'),
+                    React.createElement('div', {style:{display:'flex',flexDirection:'column',gap:8}},
+                        summary.map(u => {
+                            const isSel = selUser?.user_id === u.user_id;
+                            const tc = typeColor(u.user_type);
+                            return React.createElement('div', {key:u.user_id, onClick:()=>setSelUser(isSel?null:u),
+                                style:{
+                                    padding:'14px 16px',borderRadius:10,cursor:'pointer',
+                                    background:isSel?`${tc}18`:DS.bgAlt,
+                                    border:`2px solid ${isSel?tc:DS.border}`,
+                                    transition:'all .15s',
+                                }},
+                                React.createElement('div', {style:{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:8}},
+                                    React.createElement('div', {style:{display:'flex',alignItems:'center',gap:10}},
+                                        React.createElement('div', {style:{
+                                            width:36,height:36,borderRadius:'50%',
+                                            background:`linear-gradient(135deg,${tc},${tc}88)`,
+                                            display:'flex',alignItems:'center',justifyContent:'center',
+                                            fontSize:12,fontWeight:900,color:'#fff',
+                                        }}, (u.user_name||'?').split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase()),
+                                        React.createElement('div', null,
+                                            React.createElement('div', {style:{fontSize:12,fontWeight:700,color:DS.text}}, u.user_name||u.user_id),
+                                            React.createElement('div', {style:{fontSize:9,color:tc,marginTop:1}},
+                                                (u.user_type==='employee'?'👤 Empleado':u.user_type==='admin'?'🔐 Admin':'👁 Viewer').toUpperCase()))),
+                                    React.createElement('div', {style:{textAlign:'right'}},
+                                        React.createElement('div', {style:{fontSize:18,fontWeight:900,color:tc}}, fmtSec(u.total_sec)),
+                                        React.createElement('div', {style:{fontSize:9,color:DS.textDim}}, 'tiempo total'))),
+                                React.createElement('div', {style:{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:6}},
+                                    [
+                                        {l:'VISTAS',   v:u.total_views},
+                                        {l:'DÍAS ACTIVO', v:u.active_days},
+                                        {l:'ÚLTIMO ACCESO', v:fmtDT(u.last_access).split(',')[0]},
+                                    ].map(k=>React.createElement('div', {key:k.l,style:{background:DS.bg,padding:'5px 8px',borderRadius:4}},
+                                        React.createElement('div', {style:{fontSize:8,color:DS.textDim}}, k.l),
+                                        React.createElement('div', {style:{fontSize:11,fontWeight:700,color:DS.text}}, k.v)))));
+
+                        }))),
+
+                // ── User detail ─────────────────────────────────────
+                selUser && React.createElement('div', null,
+                    React.createElement('div', {style:{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16}},
+                        React.createElement('div', null,
+                            React.createElement('div', {style:{fontSize:16,fontWeight:900,color:DS.text}}, selUser.user_name),
+                            React.createElement('div', {style:{fontSize:10,color:DS.textDim}},
+                                fmtDT(selUser.first_access) + ' → ' + fmtDT(selUser.last_access))),
+                        React.createElement('button', {onClick:()=>setSelUser(null),
+                            style:{background:'transparent',border:`1px solid ${DS.border}`,color:DS.textDim,cursor:'pointer',padding:'5px 10px',fontFamily:DS.mono,fontSize:10}}, '✕ Cerrar')),
+
+                    // Time by module chart
+                    React.createElement('div', {style:{background:DS.bgAlt,border:`1px solid ${DS.border}`,borderRadius:8,padding:16,marginBottom:16}},
+                        React.createElement('div', {style:{fontSize:9,color:DS.textDim,letterSpacing:'0.1em',marginBottom:12}}, 'TIEMPO POR MÓDULO'),
+                        viewTime.map(([view, sec]) =>
+                            React.createElement('div', {key:view,style:{marginBottom:8}},
+                                React.createElement('div', {style:{display:'flex',justifyContent:'space-between',marginBottom:3}},
+                                    React.createElement('span', {style:{fontSize:11,color:DS.text}}, viewLabel(view)),
+                                    React.createElement('span', {style:{fontSize:11,color:DS.glow,fontWeight:700}}, fmtSec(sec))),
+                                React.createElement('div', {style:{height:6,background:DS.bg,borderRadius:3,overflow:'hidden'}},
+                                    React.createElement('div', {style:{
+                                        height:'100%',borderRadius:3,
+                                        width:`${(sec/maxViewTime)*100}%`,
+                                        background:`linear-gradient(to right,${DS.glow},${DS.glow}88)`,
+                                        transition:'width .5s ease',
+                                    }}))))),
+
+                    // Activity timeline
+                    React.createElement('div', {style:{background:DS.bgAlt,border:`1px solid ${DS.border}`,borderRadius:8,padding:16}},
+                        React.createElement('div', {style:{fontSize:9,color:DS.textDim,letterSpacing:'0.1em',marginBottom:12}},
+                            'HISTORIAL DE NAVEGACIÓN — ' + userLogs.length + ' registros'),
+                        React.createElement('div', {style:{maxHeight:400,overflowY:'auto'}},
+                            React.createElement('table', {style:{width:'100%',borderCollapse:'collapse',fontSize:11}},
+                                React.createElement('thead', null,
+                                    React.createElement('tr', {style:{borderBottom:`1px solid ${DS.border}`}},
+                                        ['FECHA/HORA','MÓDULO','DURACIÓN'].map(h=>
+                                            React.createElement('th', {key:h,style:{padding:'6px 8px',textAlign:h==='DURACIÓN'?'right':'left',color:DS.textDim,fontSize:9,fontWeight:700,letterSpacing:'0.06em'}}), h))),
+                                React.createElement('tbody', null,
+                                    userLogs.map((log,i) =>
+                                        React.createElement('tr', {key:log.id,style:{borderBottom:`1px solid ${DS.border}22`,background:i%2===0?'transparent':`${DS.glow}03`}},
+                                            React.createElement('td', {style:{padding:'7px 8px',color:DS.textDim,fontSize:10}}, fmtDT(log.entered_at)),
+                                            React.createElement('td', {style:{padding:'7px 8px'}},
+                                                React.createElement('span', {style:{
+                                                    padding:'2px 8px',borderRadius:4,fontSize:10,fontWeight:600,
+                                                    background:`${DS.glow}12`,color:DS.glow,
+                                                }}, viewLabel(log.view_name))),
+                                            React.createElement('td', {style:{padding:'7px 8px',textAlign:'right',color:DS.text,fontWeight:700}},
+                                                fmtSec(log.duration_sec)))))))))));
+};
+
 // ═══════════════════════════════════════════════
 //  SIDEBAR NAV
 // ═══════════════════════════════════════════════
@@ -13191,6 +13380,51 @@ function App() {
     const [view, setView] = useState("dashboard");
     const [sideOpen, setSideOpen] = useState(false);
     const closeSide = () => setSideOpen(false);
+
+    // ── Navigation tracking ──────────────────────────────────────────
+    const viewEntryRef = React.useRef({ view: 'dashboard', at: Date.now(), sessionId: 'sess_' + Date.now() });
+    const pendingLogsRef = React.useRef([]);
+
+    const flushLogs = React.useCallback(() => {
+        if (!window.TC_API?.IS_SERVER) return;
+        const logs = pendingLogsRef.current.filter(l => l.durationSec > 0);
+        if (logs.length === 0) return;
+        pendingLogsRef.current = [];
+        window.TC_API.saveLogs(logs).catch(() => {});
+    }, []);
+
+    const trackViewChange = React.useCallback((newView, session) => {
+        if (!session) return;
+        const prev = viewEntryRef.current;
+        const now = Date.now();
+        const durationSec = Math.round((now - prev.at) / 1000);
+        if (durationSec > 1) {
+            pendingLogsRef.current.push({
+                id: 'log_' + prev.at + '_' + Math.random().toString(36).slice(2,7),
+                userId: session.id || session.user?.id,
+                userName: session.name || session.user?.name || 'Unknown',
+                userType: session.type || (session.isEmployee ? 'employee' : 'admin'),
+                viewName: prev.view,
+                enteredAt: new Date(prev.at).toISOString(),
+                exitedAt: new Date(now).toISOString(),
+                durationSec,
+                sessionId: prev.sessionId,
+                data: {},
+            });
+        }
+        viewEntryRef.current = { view: newView, at: now, sessionId: prev.sessionId };
+        // Flush every 5 logs
+        if (pendingLogsRef.current.length >= 5) flushLogs();
+    }, [flushLogs]);
+
+    // Flush on page unload
+    React.useEffect(() => {
+        const handleUnload = () => flushLogs();
+        window.addEventListener('beforeunload', handleUnload);
+        // Also flush every 30 seconds
+        const interval = setInterval(flushLogs, 30000);
+        return () => { window.removeEventListener('beforeunload', handleUnload); clearInterval(interval); };
+    }, [flushLogs]);
     // ── Global cross-module state ────────────────────────────
     const [globalToast, setGlobalToast] = useState(null);
     const [newJobApps, setNewJobApps] = useState(0);     // badge for jobs nav
@@ -13365,7 +13599,7 @@ function App() {
                         : n.id === "jobs" ? DS.glow
                         : n.id === "rrhh" ? DS.glowAmber
                         : DS.glowRed;
-                    return (React.createElement("button", { key: n.id, onClick: () => { setView(n.id); closeSide(); }, style: {
+                    return (React.createElement("button", { key: n.id, onClick: () => { trackViewChange(n.id, session); setView(n.id); closeSide(); }, style: {
                             width: "100%", display: "flex", alignItems: "center", gap: 10,
                             padding: "9px 12px", border: "none", cursor: "pointer", borderRadius: 8,
                             background: active ? `${accentColor}20` : "transparent",
