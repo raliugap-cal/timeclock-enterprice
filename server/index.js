@@ -50,7 +50,22 @@ async function initDB() {
         data JSONB NOT NULL DEFAULT '{}',
         updated_at TIMESTAMPTZ DEFAULT NOW()
     );
-    CREATE TABLE IF NOT EXISTS job_applications (
+    CREATE TABLE IF NOT EXISTS session_logs (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        user_name TEXT,
+        user_type TEXT DEFAULT 'admin',
+        view_name TEXT NOT NULL,
+        entered_at TIMESTAMPTZ NOT NULL,
+        exited_at TIMESTAMPTZ,
+        duration_sec INTEGER,
+        ip_address TEXT,
+        user_agent TEXT,
+        session_id TEXT,
+        data JSONB DEFAULT '{}'
+    );
+    CREATE INDEX IF NOT EXISTS idx_logs_user ON session_logs(user_id);
+    CREATE INDEX IF NOT EXISTS idx_logs_date ON session_logs(entered_at);
         id TEXT PRIMARY KEY,
         job_id TEXT NOT NULL,
         candidate_name TEXT NOT NULL,
@@ -270,7 +285,58 @@ app.get('/api/health', async (req, res) => {
   catch { res.status(503).json({ ok: false }); }
 });
 
-// ── INTERVIEW SLOTS ───────────────────────────────────────────────────
+// ── SESSION LOGS ──────────────────────────────────────────────────────
+app.post('/api/session-logs', requireAuth, async (req, res) => {
+  const { logs } = req.body; // array of log entries
+  if (!Array.isArray(logs) || logs.length === 0) return res.json({ ok: true });
+  try {
+    for (const log of logs) {
+      await pool.query(`INSERT INTO session_logs(id,user_id,user_name,user_type,view_name,entered_at,exited_at,duration_sec,ip_address,session_id,data)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+        ON CONFLICT(id) DO UPDATE SET exited_at=$7, duration_sec=$8, updated_at=NOW()`,
+        [log.id, log.userId, log.userName, log.userType, log.viewName,
+         log.enteredAt, log.exitedAt||null, log.durationSec||null,
+         req.ip||null, log.sessionId||null, JSON.stringify(log.data||{})]);
+    }
+    res.json({ ok: true });
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/session-logs', requireAuth, async (req, res) => {
+  const { from, to, userId, limit } = req.query;
+  try {
+    let q = 'SELECT * FROM session_logs WHERE 1=1';
+    const params = [];
+    if (from)   { params.push(from);   q += ` AND entered_at >= $${params.length}`; }
+    if (to)     { params.push(to);     q += ` AND entered_at <= $${params.length}`; }
+    if (userId) { params.push(userId); q += ` AND user_id = $${params.length}`; }
+    q += ` ORDER BY entered_at DESC LIMIT ${Math.min(parseInt(limit)||1000, 5000)}`;
+    const r = await pool.query(q, params);
+    res.json(r.rows);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/session-logs/summary', requireAuth, async (req, res) => {
+  const { from, to } = req.query;
+  try {
+    const r = await pool.query(`
+      SELECT user_id, user_name, user_type,
+        COUNT(*) as total_views,
+        SUM(duration_sec) as total_sec,
+        MAX(entered_at) as last_access,
+        MIN(entered_at) as first_access,
+        COUNT(DISTINCT DATE(entered_at)) as active_days,
+        json_agg(json_build_object('view',view_name,'dur',duration_sec,'at',entered_at) ORDER BY entered_at DESC) as views
+      FROM session_logs
+      WHERE entered_at >= COALESCE($1::timestamptz, NOW() - INTERVAL '30 days')
+        AND entered_at <= COALESCE($2::timestamptz, NOW())
+        AND duration_sec IS NOT NULL
+      GROUP BY user_id, user_name, user_type
+      ORDER BY last_access DESC
+    `, [from||null, to||null]);
+    res.json(r.rows);
+  } catch(e) { res.status(500).json({ error: e.message }); }
+});
 // Public: get available slots
 app.get('/api/slots/available', async (req, res) => {
   try {
