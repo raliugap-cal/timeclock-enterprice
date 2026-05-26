@@ -1079,13 +1079,13 @@ const useAuth = (db, reloadDB) => {
     if (window.TC_API.IS_SERVER) {
       // 401 is expected when not logged in — not an error
       window.TC_API.whoAmI()
-        .then(data => { setSession({ type: data.user.type || 'admin', user: data.user }); })
+        .then(data => { setSession({ type: data.user.type || 'admin', user: data.user }); window.NavTracker && window.NavTracker.setUser(data.user); })
         .catch(() => { /* 401 = not logged in, expected */ setSession(null); })
         .finally(() => setChecking(false));
     } else {
       try {
         const s = JSON.parse(localStorage.getItem(AUTH_KEY) || 'null');
-        if (s?.user?.id) setSession(s);
+        if (s?.user?.id) { setSession(s); window.NavTracker && window.NavTracker.setUser({ ...s.user, type: s.type||'admin' }); }
       } catch {}
       setChecking(false);
     }
@@ -1135,6 +1135,7 @@ const useAuth = (db, reloadDB) => {
   const serverLogin = useCallback((user) => {
     const s = { type: user.type || 'admin', user };
     setSession(s);
+    window.NavTracker && window.NavTracker.setUser({ ...user, type: user.type||'admin' });
   }, []);
 
   // Local mode only
@@ -1146,6 +1147,7 @@ const useAuth = (db, reloadDB) => {
     const s = { type:'admin', user };
     localStorage.setItem(AUTH_KEY, JSON.stringify(s));
     setSession(s);
+    window.NavTracker && window.NavTracker.setUser({ ...user, type:'admin' });
     return true;
   }, []);
 
@@ -1154,6 +1156,7 @@ const useAuth = (db, reloadDB) => {
     const s = { type:'employee', user:{ ...emp, status: emp.status||'active' } };
     if (!window.TC_API.IS_SERVER) localStorage.setItem(AUTH_KEY, JSON.stringify(s));
     setSession(s);
+    window.NavTracker && window.NavTracker.setUser({ ...emp, type:'employee', isEmployee:true });
   }, []);
 
   return { session, checking, loginAdmin, loginEmployee, serverLogin, logout: doLogout, inactivityWarning, resetInactivityTimer };
@@ -13373,6 +13376,62 @@ const NAV = [
     { id: "permisos", icon: Shield, tkey: "nav_permisos" },
 ];
 // ═══════════════════════════════════════════════
+//  NAVIGATION TRACKER — Global module
+// ═══════════════════════════════════════════════
+window.NavTracker = (function() {
+    var state = { view: 'dashboard', at: Date.now(), sessionId: 'sess_' + Date.now() };
+    var pending = [];
+    var currentUser = null;
+
+    function flush() {
+        if (!window.TC_API || !window.TC_API.IS_SERVER) return;
+        if (pending.length === 0) return;
+        var logs = pending.slice();
+        pending = [];
+        window.TC_API.saveLogs(logs)
+            .then(function() { console.log('[tracker] saved', logs.length, 'logs'); })
+            .catch(function(e) { console.warn('[tracker] save failed:', e.message); pending = logs.concat(pending); });
+    }
+
+    function track(newView) {
+        if (!currentUser) return;
+        var now = Date.now();
+        var durationSec = Math.round((now - state.at) / 1000);
+        if (state.view !== newView) {
+            pending.push({
+                id: 'log_' + state.at + '_' + Math.random().toString(36).slice(2,7),
+                userId: currentUser.id || 'unknown',
+                userName: currentUser.name || currentUser.username || 'Unknown',
+                userType: currentUser.isEmployee ? 'employee' : (currentUser.role || currentUser.type || 'admin'),
+                viewName: state.view,
+                enteredAt: new Date(state.at).toISOString(),
+                exitedAt: new Date(now).toISOString(),
+                durationSec: durationSec,
+                sessionId: state.sessionId,
+                data: {},
+            });
+            console.log('[tracker]', state.view, durationSec + 's →', newView);
+            if (pending.length >= 3) flush();
+        }
+        state = { view: newView, at: now, sessionId: state.sessionId };
+    }
+
+    function setUser(user) {
+        currentUser = user;
+        if (user) state.sessionId = 'sess_' + Date.now();
+    }
+
+    // Flush every 20 seconds and on unload
+    setInterval(flush, 20000);
+    window.addEventListener('beforeunload', flush);
+
+    // Expose for debugging
+    window.__tracker = { flush: flush, pending: function() { return pending; }, state: function() { return state; } };
+
+    return { track: track, setUser: setUser, flush: flush };
+})();
+
+// ═══════════════════════════════════════════════
 //  ROOT APP
 // ═══════════════════════════════════════════════
 function App() {
@@ -13380,56 +13439,6 @@ function App() {
     const [view, setView] = useState("dashboard");
     const [sideOpen, setSideOpen] = useState(false);
     const closeSide = () => setSideOpen(false);
-
-    // ── Navigation tracking ──────────────────────────────────────────
-    const viewEntryRef = React.useRef({ view: 'dashboard', at: Date.now(), sessionId: 'sess_' + Date.now() });
-    const pendingLogsRef = React.useRef([]);
-
-    const flushLogs = React.useCallback(() => {
-        if (!window.TC_API?.IS_SERVER) return;
-        const logs = pendingLogsRef.current.filter(l => l.durationSec >= 0);
-        if (logs.length === 0) return;
-        pendingLogsRef.current = [];
-        console.log('[tracker] flushing', logs.length, 'logs');
-        window.TC_API.saveLogs(logs).catch(e => console.warn('[tracker] flush failed:', e.message));
-    }, []);
-
-    const trackViewChange = React.useCallback((newView, currentSession) => {
-        const prev = viewEntryRef.current;
-        const now = Date.now();
-        const durationSec = Math.round((now - prev.at) / 1000);
-        const user = currentSession?.user || currentSession;
-        if (user && prev.view !== newView) {
-            const log = {
-                id: 'log_' + prev.at + '_' + Math.random().toString(36).slice(2,7),
-                userId: user.id || 'unknown',
-                userName: user.name || user.username || 'Unknown',
-                userType: currentSession?.isEmployee ? 'employee' : (user.role || user.type || 'admin'),
-                viewName: prev.view,
-                enteredAt: new Date(prev.at).toISOString(),
-                exitedAt: new Date(now).toISOString(),
-                durationSec,
-                sessionId: prev.sessionId,
-                data: {},
-            };
-            pendingLogsRef.current.push(log);
-            console.log('[tracker] logged:', prev.view, durationSec+'s', '→', newView);
-        }
-        viewEntryRef.current = { view: newView, at: now, sessionId: prev.sessionId };
-        if (pendingLogsRef.current.length >= 3) flushLogs();
-    }, [flushLogs]);
-
-    // Flush on page unload
-    React.useEffect(() => {
-        const handleUnload = () => flushLogs();
-        window.addEventListener('beforeunload', handleUnload);
-        // Flush every 15 seconds
-        const interval = setInterval(flushLogs, 15000);
-        // Expose for manual testing
-        window.__flushLogs = flushLogs;
-        window.__pendingLogs = pendingLogsRef;
-        return () => { window.removeEventListener('beforeunload', handleUnload); clearInterval(interval); };
-    }, [flushLogs]);
     // ── Global cross-module state ────────────────────────────
     const [globalToast, setGlobalToast] = useState(null);
     const [newJobApps, setNewJobApps] = useState(0);     // badge for jobs nav
@@ -13604,7 +13613,7 @@ function App() {
                         : n.id === "jobs" ? DS.glow
                         : n.id === "rrhh" ? DS.glowAmber
                         : DS.glowRed;
-                    return (React.createElement("button", { key: n.id, onClick: () => { trackViewChange(n.id, session); setView(n.id); closeSide(); }, style: {
+                    return (React.createElement("button", { key: n.id, onClick: () => { window.NavTracker.track(n.id); setView(n.id); closeSide(); }, style: {
                             width: "100%", display: "flex", alignItems: "center", gap: 10,
                             padding: "9px 12px", border: "none", cursor: "pointer", borderRadius: 8,
                             background: active ? `${accentColor}20` : "transparent",
