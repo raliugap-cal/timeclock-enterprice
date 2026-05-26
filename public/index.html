@@ -11757,20 +11757,54 @@ const JobApplyWizard = ({ vacancy, onClose, onSubmit, t }) => {
                         availableSlots.length === 0
                             ? React.createElement("div",{style:{padding:'12px 14px',background:DS.surface,border:`1px solid ${DS.border}`,borderRadius:8,fontSize:11,color:DS.textDim}},
                                 "No hay horarios disponibles en este momento. El reclutador te contactará para agendar.")
-                            : React.createElement("div",{style:{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))',gap:8}},
-                                availableSlots.map(slot => {
-                                    const isSel = form.schedule.slotId === slot.id;
-                                    const d = new Date(slot.date+'T00:00:00').toLocaleDateString('es-MX',{weekday:'short',day:'numeric',month:'short'});
-                                    return React.createElement("div",{key:slot.id,onClick:()=>upd('schedule','slotId',slot.id),style:{
-                                        padding:'10px 12px',borderRadius:8,cursor:'pointer',textAlign:'center',
-                                        background:isSel?`${DS.glowGreen}22`:DS.surface,
-                                        border:`2px solid ${isSel?DS.glowGreen:DS.border}`,
-                                        transition:'all .15s',
-                                    }},
-                                        React.createElement("div",{style:{fontSize:11,fontWeight:700,color:isSel?DS.glowGreen:DS.text}},slot.time),
-                                        React.createElement("div",{style:{fontSize:9,color:DS.textDim,marginTop:2}},d),
-                                        React.createElement("div",{style:{fontSize:9,color:DS.textDim}},slot.duration_min+'min'));
-                                })),
+                            : React.createElement("div",null,
+                                // STEP 1 — Select day
+                                React.createElement("div",{style:{fontSize:10,color:DS.textDim,marginBottom:8,fontWeight:600}}, "PASO 1 — Elige un día disponible"),
+                                React.createElement("div",{style:{display:'flex',gap:8,flexWrap:'wrap',marginBottom:16}},
+                                    // Group slots by date
+                                    [...new Set(availableSlots.map(s=>s.date.slice(0,10)))].sort().map(day => {
+                                        const daySlots = availableSlots.filter(s=>s.date.slice(0,10)===day);
+                                        const isSelDay = form.schedule._selDay === day;
+                                        const d = new Date(day+'T00:00:00');
+                                        const dayLabel = d.toLocaleDateString('es-MX',{weekday:'long'});
+                                        const dateLabel = d.toLocaleDateString('es-MX',{day:'numeric',month:'short'});
+                                        return React.createElement("div",{key:day,
+                                            onClick:()=>{ upd('schedule','_selDay',day); upd('schedule','slotId',''); },
+                                            style:{
+                                                padding:'12px 16px',borderRadius:10,cursor:'pointer',textAlign:'center',minWidth:100,
+                                                background:isSelDay?`${DS.glow}22`:DS.surface,
+                                                border:`2px solid ${isSelDay?DS.glow:DS.border}`,
+                                                transition:'all .15s',
+                                            }},
+                                            React.createElement("div",{style:{fontSize:12,fontWeight:800,color:isSelDay?DS.glow:DS.text,textTransform:'capitalize'}}, dayLabel),
+                                            React.createElement("div",{style:{fontSize:13,fontWeight:900,color:isSelDay?DS.glow:DS.textMid,marginTop:2}}, dateLabel),
+                                            React.createElement("div",{style:{fontSize:9,color:DS.textDim,marginTop:4}}, daySlots.length+' horario'+(daySlots.length>1?'s':'')));
+                                    })),
+                                // STEP 2 — Select time (only if day selected)
+                                form.schedule._selDay && React.createElement("div",null,
+                                    React.createElement("div",{style:{fontSize:10,color:DS.textDim,marginBottom:8,fontWeight:600}},
+                                        "PASO 2 — Elige tu hora para el " + new Date(form.schedule._selDay+'T00:00:00').toLocaleDateString('es-MX',{weekday:'long',day:'numeric',month:'long'})),
+                                    React.createElement("div",{style:{display:'flex',gap:8,flexWrap:'wrap'}},
+                                        availableSlots
+                                            .filter(s=>s.date.slice(0,10)===form.schedule._selDay)
+                                            .sort((a,b)=>a.time.localeCompare(b.time))
+                                            .map(slot => {
+                                                const isSel = form.schedule.slotId === slot.id;
+                                                return React.createElement("div",{key:slot.id,
+                                                    onClick:()=>upd('schedule','slotId',slot.id),
+                                                    style:{
+                                                        padding:'14px 20px',borderRadius:10,cursor:'pointer',textAlign:'center',
+                                                        background:isSel?`${DS.glowGreen}22`:DS.surface,
+                                                        border:`2px solid ${isSel?DS.glowGreen:DS.border}`,
+                                                        transition:'all .15s',
+                                                    }},
+                                                    React.createElement("div",{style:{fontSize:18,fontWeight:900,color:isSel?DS.glowGreen:DS.text,fontFamily:DS.mono}},slot.time),
+                                                    React.createElement("div",{style:{fontSize:9,color:DS.textDim,marginTop:3}},slot.duration_min+' min'));
+                                            }))),
+                                // Confirmation of selection
+                                form.schedule.slotId && React.createElement("div",{style:{marginTop:12,padding:'10px 14px',background:`${DS.glowGreen}12`,border:`1px solid ${DS.glowGreen}44`,borderRadius:8,fontSize:11,color:DS.glowGreen,fontWeight:700}},
+                                    "✓ Seleccionado: " + new Date((form.schedule._selDay||'')+'T00:00:00').toLocaleDateString('es-MX',{weekday:'long',day:'numeric',month:'long'}) +
+                                    " a las " + (availableSlots.find(s=>s.id===form.schedule.slotId)||{}).time)),
                         availableSlots.length > 0 && React.createElement("div",{style:{marginTop:8,fontSize:10,color:DS.textDim}},
                             "¿Ninguno te funciona? Deja una nota abajo.")),
 
