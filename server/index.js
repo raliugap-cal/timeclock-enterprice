@@ -359,24 +359,21 @@ app.put('/api/applications/:id', requireAuth, async (req, res) => {
 // Admin: AI analysis proxy — calls Anthropic API server-side (keeps API key secure)
 app.post('/api/applications/:id/analyze', requireAuth, async (req, res) => {
   const { id } = req.params;
-  const { cv_text, job_description, job_title } = req.body;
-  if (!cv_text) return res.status(400).json({ error: 'CV text required' });
+  const { cv_data, job_description, job_title } = req.body;
+  if (!cv_data) return res.status(400).json({ error: 'CV data required' });
   try {
     const prompt = `Eres un experto en recursos humanos. Analiza el siguiente CV para el puesto de "${job_title||'No especificado'}".
 
 DESCRIPCIÓN DEL PUESTO:
 ${job_description||'No especificada'}
 
-CONTENIDO DEL CV:
-${cv_text.slice(0,4000)}
-
-Responde ÚNICAMENTE con JSON válido (sin markdown, sin texto extra):
+Analiza el CV adjunto y responde ÚNICAMENTE con JSON válido (sin markdown, sin texto extra):
 {
   "score": 75,
   "resumen": "Breve resumen del candidato en 2-3 oraciones",
   "escolaridad": { "nivel": "Licenciatura", "area": "Ingeniería", "score": 80, "notas": "..." },
   "experiencia": { "anios": 5, "relevancia": "alta", "score": 85, "notas": "..." },
-  "habilidades": { "tecncias": ["skill1","skill2"], "blandas": ["skill3"], "score": 70, "notas": "..." },
+  "habilidades": { "tecnicas": ["skill1","skill2"], "blandas": ["skill3"], "score": 70, "notas": "..." },
   "referencias": { "tiene": true, "score": 60, "notas": "..." },
   "fortalezas": ["fortaleza1","fortaleza2","fortaleza3"],
   "areas_mejora": ["area1","area2"],
@@ -384,6 +381,7 @@ Responde ÚNICAMENTE con JSON válido (sin markdown, sin texto extra):
   "justificacion": "Razón de la recomendación en 2-3 oraciones"
 }`;
 
+    // Send CV as PDF document to Claude (base64)
     const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -394,15 +392,36 @@ Responde ÚNICAMENTE con JSON válido (sin markdown, sin texto extra):
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 1500,
-        messages: [{ role: 'user', content: prompt }],
+        messages: [{
+          role: 'user',
+          content: [
+            {
+              type: 'document',
+              source: {
+                type: 'base64',
+                media_type: 'application/pdf',
+                data: cv_data,
+              }
+            },
+            {
+              type: 'text',
+              text: prompt
+            }
+          ]
+        }],
       }),
     });
 
-    if (!aiRes.ok) throw new Error('AI API error: ' + aiRes.status);
+    if (!aiRes.ok) {
+      const errBody = await aiRes.text();
+      console.error('[ai-analysis] Anthropic error:', aiRes.status, errBody.slice(0,200));
+      throw new Error('AI API error: ' + aiRes.status);
+    }
     const aiData = await aiRes.json();
     const text = (aiData.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('');
+    console.log('[ai-analysis] raw response:', text.slice(0,300));
     const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error('No JSON in AI response');
+    if (!jsonMatch) throw new Error('No JSON in AI response: ' + text.slice(0,100));
     const analysis = JSON.parse(jsonMatch[0]);
 
     // Save to DB
