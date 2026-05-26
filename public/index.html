@@ -943,7 +943,7 @@ const SEED = {
     departments: [
         { id: "d1", name: "Tecnología", color: "#00d4ff", head: "e1", budget: 450000 },
         { id: "d2", name: "Ventas", color: "#00ff88", head: "e2", budget: 280000 },
-        { id: "d3", name: "Recursos Humanos", color: "#ffaa00", head: "e3", budget: 180000 },
+        { id: "d3", name: "Capital Humano", color: "#ffaa00", head: "e3", budget: 180000 },
         { id: "d4", name: "Operaciones", color: "#a855f7", head: "e4", budget: 320000 },
         { id: "d5", name: "Finanzas", color: "#ff3366", head: "e6", budget: 220000 },
     ],
@@ -6528,7 +6528,7 @@ const ViewDepartments = ({ db, upsertDepartment, deleteDepartment }) => {
                 React.createElement("span", { style: { fontFamily: DS.mono, fontSize: 11, color: DS.glowRed } }, error))),
             React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 } },
                 React.createElement("div", { style: { gridColumn: "1/-1" } },
-                    React.createElement(Input, { label: "Nombre del Departamento *", value: form.name || "", onChange: v => setForm(p => (Object.assign(Object.assign({}, p), { name: v }))), placeholder: "Ej: Tecnolog\u00EDa, Recursos Humanos...", required: true })),
+                    React.createElement(Input, { label: "Nombre del Departamento *", value: form.name || "", onChange: v => setForm(p => (Object.assign(Object.assign({}, p), { name: v }))), placeholder: "Ej: Tecnolog\u00EDa, Capital Humano...", required: true })),
                 React.createElement("div", { style: { gridColumn: "1/-1" } },
                     React.createElement("label", { style: { fontSize: 9, color: DS.textDim, fontFamily: DS.mono, letterSpacing: "0.1em", textTransform: "uppercase", display: "block", marginBottom: 8 } }, "COLOR IDENTIFICADOR"),
                     React.createElement("div", { style: { display: "flex", gap: 10, flexWrap: "wrap" } },
@@ -10249,7 +10249,7 @@ const TRANSLATIONS = {
         jobs_no: "No",
         jobs_to_present: "Actualidad",
 
-        nav_rrhh: "Recursos Humanos",
+        nav_rrhh: "Capital Humano",
         rrhh_tab_onboarding: "Onboarding",
         rrhh_tab_employees: "Empleados",
         rrhh_tab_departments: "Departamentos y Puestos",
@@ -11537,7 +11537,7 @@ const TRANSLATIONS = {
 const LangContext = React.createContext({ lang: "es", t: k => k });
 const useT = () => React.useContext(LangContext);
 // ═══════════════════════════════════════════════════════════════
-//  MÓDULO RECURSOS HUMANOS — Onboarding · Empleados · Deptos · Geocercas
+//  MÓDULO CAPITAL HUMANO — Onboarding · Empleados · Deptos · Geocercas
 // ═══════════════════════════════════════════════════════════════
 const ONBOARDING_DOCS = [
     "rrhh_docs_id", "rrhh_docs_tax", "rrhh_docs_bank",
@@ -12190,7 +12190,7 @@ const ViewJobs = ({ db }) => {
         } catch(e) {}
         return [
             { id:"v1", title:"Senior Payroll Specialist", dept:"Nómina", country:"México", location:"Ciudad de México", type:"full", salaryMin:40000, salaryMax:60000, currency:"MXN", status:"open", description:"Buscamos especialista senior en nómina con experiencia en CFDI 4.0 y SAT. Gestión de más de 500 empleados.", requirements:"5+ años · CFDI 4.0 · IMSS · Excel avanzado", benefits:"Seguro médico · Home office parcial · Bonos trimestrales", posted:"2026-02-15", deadline:"2026-04-01" },
-            { id:"v2", title:"HR Business Partner", dept:"Recursos Humanos", country:"Colombia", location:"Bogotá", type:"hybrid", salaryMin:5000000, salaryMax:8000000, currency:"COP", status:"open", description:"Socio estratégico de RRHH para unidades de negocio en Colombia y Ecuador.", requirements:"3+ años HRBP · Ley laboral colombiana · Inglés intermedio", benefits:"Plan de carrera · Capacitaciones · Seguro médico", posted:"2026-02-20", deadline:"2026-03-31" },
+            { id:"v2", title:"HR Business Partner", dept:"Capital Humano", country:"Colombia", location:"Bogotá", type:"hybrid", salaryMin:5000000, salaryMax:8000000, currency:"COP", status:"open", description:"Socio estratégico de RRHH para unidades de negocio en Colombia y Ecuador.", requirements:"3+ años HRBP · Ley laboral colombiana · Inglés intermedio", benefits:"Plan de carrera · Capacitaciones · Seguro médico", posted:"2026-02-20", deadline:"2026-03-31" },
             { id:"v3", title:"Full-Stack Developer", dept:"Tecnología", country:"Argentina", location:"Buenos Aires / Remote", type:"remote", salaryMin:3000, salaryMax:5000, currency:"USD", status:"open", description:"Desarrollo de nuevas funcionalidades para nuestra plataforma SaaS de nómina internacional.", requirements:"React · Node.js · PostgreSQL · 3+ años", benefits:"100% remoto · Equipo propio · 30 días vacaciones", posted:"2026-03-01", deadline:"2026-04-15" },
             { id:"v4", title:"Contadora Senior", dept:"Fiscal", country:"El Salvador", location:"San Salvador", type:"full", salaryMin:1500, salaryMax:2500, currency:"USD", status:"open", description:"Responsable del área fiscal y contabilidad para operaciones en Centroamérica.", requirements:"Licenciatura Contaduría · NIIF · 5+ años · Inglés básico", benefits:"Seguro de vida · Estacionamiento · Capacitación continua", posted:"2026-03-05", deadline:"2026-04-30" },
             { id:"v5", title:"Sales Executive LATAM", dept:"Comercial", country:"Estados Unidos", location:"Miami, FL", type:"hybrid", salaryMin:60000, salaryMax:90000, currency:"USD", status:"paused", description:"Expansión de cartera de clientes en mercado latinoamericano desde Miami.", requirements:"5+ años ventas SaaS · Español nativo · Inglés avanzado · Viajes 30%", benefits:"Comisiones sin tope · Health insurance · 401k", posted:"2026-01-10", deadline:"2026-03-20" },
