@@ -11909,7 +11909,7 @@ const AgendaReclutador = ({ db, vacancies }) => {
         try {
             const vac = vacancies.find(v=>v.id===app.job_id)||{};
             const res = await window.TC_API.analyzeCV(app.id, {
-                cv_text: app.cv_data,
+                cv_data: app.cv_data,
                 job_title: vac.title||'No especificado',
                 job_description: (vac.description||'') + '\nRequisitos: ' + (vac.requirements||''),
             });
