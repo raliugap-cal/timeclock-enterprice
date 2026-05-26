@@ -6,6 +6,7 @@ const bcrypt       = require('bcryptjs');
 const jwt          = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
 const compression  = require('compression');
+const Anthropic = require('@anthropic-ai/sdk');
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
