@@ -27,7 +27,24 @@ const app = express();
 app.use(compression());
 app.use(cookieParser());
 app.use(express.json({ limit: '50mb' }));  // Large limit for empSnapshot with 500 employees
-app.use(express.static(path.join(__dirname, '../public')));
+
+// Serve index.html with no-cache to always get latest version
+app.get('/', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.sendFile(path.join(__dirname, '../public/index.html'));
+});
+
+app.use(express.static(path.join(__dirname, '../public'), {
+  etag: false,
+  lastModified: false,
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('index.html')) {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+    }
+  }
+}));
 
 async function initDB() {
   await pool.query(`
@@ -610,7 +627,10 @@ app.post('/api/fiscal-periods/:id/close', requireAuth, async (req, res) => {
     res.json({ ok: true, summary: { cuts: cuts.rows.length, employees: Object.keys(empAccum).length, grandGross: periodData.grandGross } });
   } catch(e) { console.error('[fiscal-period/close]', e.message); res.status(500).json({ error: e.message }); }
 });
-app.get('*', (req, res) => res.sendFile(path.join(__dirname, '../public/index.html')));
+app.get('*', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+  res.sendFile(path.join(__dirname, '../public/index.html'));
+});
 
 const PORT = process.env.PORT || 3000;
 initDB().then(() => app.listen(PORT, () => console.log(`🚀 TimeClock on :${PORT} (${IS_PROD?'prod':'dev'})`)))
