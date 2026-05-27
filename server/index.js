@@ -287,8 +287,9 @@ app.get('/api/session-logs', requireAuth, async (req, res) => {
     if (userId) { params.push(userId); q += ` AND user_id = $${params.length}`; }
     q += ` ORDER BY entered_at DESC LIMIT ${Math.min(parseInt(limit)||1000, 5000)}`;
     const r = await pool.query(q, params);
+    console.log('[session-logs] rows:', r.rows.length);
     res.json(r.rows);
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { console.error('[session-logs]', e.message); res.status(500).json({ error: e.message }); }
 });
 
 app.get('/api/session-logs/summary', requireAuth, async (req, res) => {
@@ -297,20 +298,19 @@ app.get('/api/session-logs/summary', requireAuth, async (req, res) => {
     const r = await pool.query(`
       SELECT user_id, user_name, user_type,
         COUNT(*) as total_views,
-        SUM(duration_sec) as total_sec,
+        COALESCE(SUM(duration_sec), 0) as total_sec,
         MAX(entered_at) as last_access,
         MIN(entered_at) as first_access,
-        COUNT(DISTINCT DATE(entered_at)) as active_days,
-        json_agg(json_build_object('view',view_name,'dur',duration_sec,'at',entered_at) ORDER BY entered_at DESC) as views
+        COUNT(DISTINCT DATE(entered_at)) as active_days
       FROM session_logs
       WHERE entered_at >= COALESCE($1::timestamptz, NOW() - INTERVAL '30 days')
         AND entered_at <= COALESCE($2::timestamptz, NOW())
-        AND duration_sec IS NOT NULL
       GROUP BY user_id, user_name, user_type
       ORDER BY last_access DESC
     `, [from||null, to||null]);
+    console.log('[session-logs/summary] rows:', r.rows.length);
     res.json(r.rows);
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { console.error('[session-logs/summary]', e.message); res.status(500).json({ error: e.message }); }
 });
 // Public: get available slots
 app.get('/api/slots/available', async (req, res) => {
