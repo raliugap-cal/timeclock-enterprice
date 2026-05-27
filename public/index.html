@@ -6371,7 +6371,9 @@ const ViewUsageReport = () => {
     const [logs, setLogs]       = React.useState(null);
     const [selUser, setSelUser] = React.useState(null);
     const [dateFrom, setDateFrom] = React.useState(() => {
-        const d = new Date(); d.setDate(d.getDate()-30);
+        // Default: start of current month
+        const d = new Date();
+        d.setDate(1);
         return d.toISOString().slice(0,10);
     });
     const [dateTo, setDateTo] = React.useState(new Date().toISOString().slice(0,10));
@@ -6386,13 +6388,22 @@ const ViewUsageReport = () => {
     const viewLabel = v => VIEW_LABELS[v] || v;
 
     const fmtSec = s => {
-        if (!s) return '—';
-        const h = Math.floor(s/3600); const m = Math.floor((s%3600)/60); const sec = s%60;
+        const n = Number(s) || 0;
+        if (!n) return '—';
+        const h = Math.floor(n/3600); const m = Math.floor((n%3600)/60); const sec = n%60;
         if (h>0) return `${h}h ${m}m`;
         if (m>0) return `${m}m ${sec}s`;
         return `${sec}s`;
     };
     const fmtDT = iso => iso ? new Date(iso).toLocaleString('es-MX',{dateStyle:'short',timeStyle:'short'}) : '—';
+
+    // Normalize summary row — PostgreSQL returns numbers as strings
+    const normUser = u => ({
+        ...u,
+        total_views: Number(u.total_views)||0,
+        total_sec:   Number(u.total_sec)||0,
+        active_days: Number(u.active_days)||0,
+    });
 
     const loadData = async () => {
         if (!window.TC_API?.IS_SERVER) return;
@@ -6403,9 +6414,8 @@ const ViewUsageReport = () => {
                 window.TC_API.getLogs({ from: dateFrom+'T00:00:00', to: dateTo+'T23:59:59', limit: 2000 }),
             ]);
             console.log('[usage] summary rows:', sum?.length, 'logs:', rawLogs?.length);
-            if (sum?.length > 0) console.log('[usage] sample user:', JSON.stringify(sum[0]).slice(0,200));
-            setSummary(sum);
-            setLogs(rawLogs);
+            setSummary((sum||[]).map(normUser));
+            setLogs(rawLogs||[]);
         } catch(e) { console.error('[usage]', e.message); setSummary([]); setLogs([]); }
         setLoading(false);
     };
