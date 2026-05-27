@@ -6402,6 +6402,8 @@ const ViewUsageReport = () => {
                 window.TC_API.getLogsSummary({ from: dateFrom+'T00:00:00', to: dateTo+'T23:59:59' }),
                 window.TC_API.getLogs({ from: dateFrom+'T00:00:00', to: dateTo+'T23:59:59', limit: 2000 }),
             ]);
+            console.log('[usage] summary rows:', sum?.length, 'logs:', rawLogs?.length);
+            if (sum?.length > 0) console.log('[usage] sample user:', JSON.stringify(sum[0]).slice(0,200));
             setSummary(sum);
             setLogs(rawLogs);
         } catch(e) { console.error('[usage]', e.message); setSummary([]); setLogs([]); }
