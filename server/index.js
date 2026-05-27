@@ -47,72 +47,30 @@ app.use(express.static(path.join(__dirname, '../public'), {
 }));
 
 async function initDB() {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS employees    (id TEXT PRIMARY KEY, data JSONB NOT NULL, updated_at TIMESTAMPTZ DEFAULT NOW());
-    CREATE TABLE IF NOT EXISTS locations    (id TEXT PRIMARY KEY, data JSONB NOT NULL, updated_at TIMESTAMPTZ DEFAULT NOW());
-    CREATE TABLE IF NOT EXISTS departments  (id TEXT PRIMARY KEY, data JSONB NOT NULL, updated_at TIMESTAMPTZ DEFAULT NOW());
-    CREATE TABLE IF NOT EXISTS time_records (id TEXT PRIMARY KEY, emp_id TEXT, record_date DATE, data JSONB NOT NULL, updated_at TIMESTAMPTZ DEFAULT NOW());
-    CREATE TABLE IF NOT EXISTS payroll_cuts (id TEXT PRIMARY KEY, status TEXT DEFAULT 'pendiente', data JSONB NOT NULL, updated_at TIMESTAMPTZ DEFAULT NOW());
-    CREATE TABLE IF NOT EXISTS system_users (id TEXT PRIMARY KEY, username TEXT UNIQUE NOT NULL, data JSONB NOT NULL, updated_at TIMESTAMPTZ DEFAULT NOW());
-    CREATE TABLE IF NOT EXISTS tax_ytd      (emp_id TEXT PRIMARY KEY, data JSONB NOT NULL, updated_at TIMESTAMPTZ DEFAULT NOW());
-    CREATE TABLE IF NOT EXISTS company_cfg  (id TEXT PRIMARY KEY DEFAULT 'main', data JSONB NOT NULL DEFAULT '{}', updated_at TIMESTAMPTZ DEFAULT NOW());
-    CREATE TABLE IF NOT EXISTS fiscal_periods (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        date_start DATE NOT NULL,
-        date_end DATE NOT NULL,
-        status TEXT DEFAULT 'abierto',
-        closed_by TEXT,
-        closed_at TIMESTAMPTZ,
-        data JSONB NOT NULL DEFAULT '{}',
-        updated_at TIMESTAMPTZ DEFAULT NOW()
-    );
-    CREATE TABLE IF NOT EXISTS session_logs (
-        id TEXT PRIMARY KEY,
-        user_id TEXT NOT NULL,
-        user_name TEXT,
-        user_type TEXT DEFAULT 'admin',
-        view_name TEXT NOT NULL,
-        entered_at TIMESTAMPTZ NOT NULL,
-        exited_at TIMESTAMPTZ,
-        duration_sec INTEGER,
-        ip_address TEXT,
-        user_agent TEXT,
-        session_id TEXT,
-        data JSONB DEFAULT '{}'
-    );
-    CREATE INDEX IF NOT EXISTS idx_logs_user ON session_logs(user_id);
-    CREATE INDEX IF NOT EXISTS idx_logs_date ON session_logs(entered_at);
-        id TEXT PRIMARY KEY,
-        job_id TEXT NOT NULL,
-        candidate_name TEXT NOT NULL,
-        candidate_email TEXT,
-        status TEXT DEFAULT 'nuevo',
-        cv_data TEXT,
-        ai_score INTEGER,
-        ai_analysis JSONB,
-        interview_slot TEXT,
-        data JSONB NOT NULL DEFAULT '{}',
-        created_at TIMESTAMPTZ DEFAULT NOW(),
-        updated_at TIMESTAMPTZ DEFAULT NOW()
-    );
-    CREATE TABLE IF NOT EXISTS interview_slots (
-        id TEXT PRIMARY KEY,
-        date DATE NOT NULL,
-        time TEXT NOT NULL,
-        duration_min INTEGER DEFAULT 60,
-        status TEXT DEFAULT 'disponible',
-        job_id TEXT,
-        application_id TEXT,
-        recruiter_note TEXT,
-        data JSONB NOT NULL DEFAULT '{}',
-        updated_at TIMESTAMPTZ DEFAULT NOW()
-    );
-    CREATE INDEX IF NOT EXISTS idx_slots_date ON interview_slots(date);
-    CREATE INDEX IF NOT EXISTS idx_apps_job   ON job_applications(job_id);
-    CREATE INDEX IF NOT EXISTS idx_tr_emp  ON time_records(emp_id);
-    CREATE INDEX IF NOT EXISTS idx_tr_date ON time_records(record_date);
-  `);
+  const tables = [
+    `CREATE TABLE IF NOT EXISTS employees    (id TEXT PRIMARY KEY, data JSONB NOT NULL, updated_at TIMESTAMPTZ DEFAULT NOW())`,
+    `CREATE TABLE IF NOT EXISTS locations    (id TEXT PRIMARY KEY, data JSONB NOT NULL, updated_at TIMESTAMPTZ DEFAULT NOW())`,
+    `CREATE TABLE IF NOT EXISTS departments  (id TEXT PRIMARY KEY, data JSONB NOT NULL, updated_at TIMESTAMPTZ DEFAULT NOW())`,
+    `CREATE TABLE IF NOT EXISTS time_records (id TEXT PRIMARY KEY, emp_id TEXT, record_date DATE, data JSONB NOT NULL, updated_at TIMESTAMPTZ DEFAULT NOW())`,
+    `CREATE TABLE IF NOT EXISTS payroll_cuts (id TEXT PRIMARY KEY, status TEXT DEFAULT 'pendiente', data JSONB NOT NULL, updated_at TIMESTAMPTZ DEFAULT NOW())`,
+    `CREATE TABLE IF NOT EXISTS system_users (id TEXT PRIMARY KEY, username TEXT UNIQUE NOT NULL, data JSONB NOT NULL, updated_at TIMESTAMPTZ DEFAULT NOW())`,
+    `CREATE TABLE IF NOT EXISTS tax_ytd      (emp_id TEXT PRIMARY KEY, data JSONB NOT NULL, updated_at TIMESTAMPTZ DEFAULT NOW())`,
+    `CREATE TABLE IF NOT EXISTS company_cfg  (id TEXT PRIMARY KEY DEFAULT 'main', data JSONB NOT NULL DEFAULT '{}', updated_at TIMESTAMPTZ DEFAULT NOW())`,
+    `CREATE TABLE IF NOT EXISTS fiscal_periods (id TEXT PRIMARY KEY, name TEXT NOT NULL, date_start DATE NOT NULL, date_end DATE NOT NULL, status TEXT DEFAULT 'abierto', closed_by TEXT, closed_at TIMESTAMPTZ, data JSONB NOT NULL DEFAULT '{}', updated_at TIMESTAMPTZ DEFAULT NOW())`,
+    `CREATE TABLE IF NOT EXISTS session_logs (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, user_name TEXT, user_type TEXT DEFAULT 'admin', view_name TEXT NOT NULL, entered_at TIMESTAMPTZ NOT NULL, exited_at TIMESTAMPTZ, duration_sec INTEGER, ip_address TEXT, user_agent TEXT, session_id TEXT, data JSONB DEFAULT '{}')`,
+    `CREATE TABLE IF NOT EXISTS job_applications (id TEXT PRIMARY KEY, job_id TEXT NOT NULL, candidate_name TEXT NOT NULL, candidate_email TEXT, status TEXT DEFAULT 'nuevo', cv_data TEXT, ai_score INTEGER, ai_analysis JSONB, interview_slot TEXT, data JSONB NOT NULL DEFAULT '{}', created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW())`,
+    `CREATE TABLE IF NOT EXISTS interview_slots (id TEXT PRIMARY KEY, date DATE NOT NULL, time TEXT NOT NULL, duration_min INTEGER DEFAULT 60, status TEXT DEFAULT 'disponible', job_id TEXT, application_id TEXT, recruiter_note TEXT, data JSONB NOT NULL DEFAULT '{}', updated_at TIMESTAMPTZ DEFAULT NOW())`,
+    `CREATE INDEX IF NOT EXISTS idx_tr_emp    ON time_records(emp_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_tr_date   ON time_records(record_date)`,
+    `CREATE INDEX IF NOT EXISTS idx_slots_date ON interview_slots(date)`,
+    `CREATE INDEX IF NOT EXISTS idx_apps_job   ON job_applications(job_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_logs_user  ON session_logs(user_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_logs_date  ON session_logs(entered_at)`,
+  ];
+  for (const sql of tables) {
+    try { await pool.query(sql); }
+    catch(e) { console.warn('[initDB] warning:', e.message.slice(0,80)); }
+  }
   console.log('✅ DB ready');
 }
 
