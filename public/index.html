@@ -2,6 +2,10 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
+  <meta http-equiv="Pragma" content="no-cache"/>
+  <meta http-equiv="Expires" content="0"/>
+  <!-- v2026-05-27-build -->
   <title>TimeClock Enterprise v2.0</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
@@ -6409,11 +6413,16 @@ const ViewUsageReport = () => {
         if (!window.TC_API?.IS_SERVER) return;
         setLoading(true);
         try {
+            // Extend range by ±1 day to absorb timezone differences (DB stores UTC)
+            const fromExt = dateFrom + 'T00:00:00.000Z';
+            const toDate = new Date(dateTo + 'T00:00:00Z');
+            toDate.setUTCDate(toDate.getUTCDate() + 1); // include full next day in UTC
+            const toExt = toDate.toISOString();
             const [sum, rawLogs] = await Promise.all([
-                window.TC_API.getLogsSummary({ from: dateFrom+'T00:00:00', to: dateTo+'T23:59:59' }),
-                window.TC_API.getLogs({ from: dateFrom+'T00:00:00', to: dateTo+'T23:59:59', limit: 2000 }),
+                window.TC_API.getLogsSummary({ from: fromExt, to: toExt }),
+                window.TC_API.getLogs({ from: fromExt, to: toExt, limit: 2000 }),
             ]);
-            console.log('[usage] summary rows:', sum?.length, 'logs:', rawLogs?.length);
+            console.log('[usage] range:', fromExt, '→', toExt, '| rows:', sum?.length, '| logs:', rawLogs?.length);
             setSummary((sum||[]).map(normUser));
             setLogs(rawLogs||[]);
         } catch(e) { console.error('[usage]', e.message); setSummary([]); setLogs([]); }
@@ -6425,26 +6434,25 @@ const ViewUsageReport = () => {
     // Color by user type
     const typeColor = t => t==='employee' ? DS.glowGreen : t==='admin' ? DS.glow : DS.glowAmber;
 
-    // Get logs for selected user
-    const userLogs = React.useMemo(() => {
-        if (!selUser || !logs) return [];
-        return logs
-            .filter(l => l.user_id === selUser.user_id)
+    // Get logs for selected user (plain computation, no useMemo)
+    const userLogs = (!selUser || !logs) ? [] :
+        logs.filter(l => l.user_id === selUser.user_id)
             .sort((a,b) => new Date(b.entered_at) - new Date(a.entered_at));
-    }, [selUser, logs]);
 
     // Time by view for selected user
-    const viewTime = React.useMemo(() => {
+    const viewTime = (() => {
         if (!selUser || !logs) return [];
         const map = {};
-        logs.filter(l => l.user_id === selUser.user_id && l.duration_sec > 0)
-            .forEach(l => { map[l.view_name] = (map[l.view_name]||0) + l.duration_sec; });
+        logs.filter(l => l.user_id === selUser.user_id && Number(l.duration_sec) > 0)
+            .forEach(l => { map[l.view_name] = (map[l.view_name]||0) + Number(l.duration_sec); });
         return Object.entries(map).sort((a,b)=>b[1]-a[1]);
-    }, [selUser, logs]);
+    })();
 
     const maxViewTime = viewTime.length > 0 ? viewTime[0][1] : 1;
 
-    if (!summary) return React.createElement('div', {style:{padding:40,textAlign:'center',color:DS.textDim,fontFamily:DS.mono}},
+    console.log('[usage] RENDER — summary:', summary?.length, 'loading:', loading);
+
+    if (summary === null) return React.createElement('div', {style:{padding:40,textAlign:'center',color:DS.textDim,fontFamily:DS.mono}},
         '⏳ Cargando datos de uso...');
 
     return React.createElement('div', {style:{fontFamily:DS.mono}},
@@ -6453,7 +6461,7 @@ const ViewUsageReport = () => {
             React.createElement('span', {style:{fontSize:9,color:DS.textDim,letterSpacing:'0.1em'}}, '🔍 FILTRAR PERÍODO:'),
             React.createElement('input', {type:'date', value:dateFrom, onChange:e=>setDateFrom(e.target.value),
                 style:{padding:'6px 10px',background:DS.bg,border:`1px solid ${DS.border}`,color:DS.text,fontFamily:DS.mono,fontSize:11}}),
-            React.createElement('span', {style:{color:DS.textDim}}), '→',
+            React.createElement('span', {style:{color:DS.textDim}}, '→'),
             React.createElement('input', {type:'date', value:dateTo, onChange:e=>setDateTo(e.target.value),
                 style:{padding:'6px 10px',background:DS.bg,border:`1px solid ${DS.border}`,color:DS.text,fontFamily:DS.mono,fontSize:11}}),
             React.createElement('button', {onClick:loadData,
