@@ -262,19 +262,19 @@ app.get('/api/health', async (req, res) => {
 
 // ── SESSION LOGS ──────────────────────────────────────────────────────
 app.post('/api/session-logs', requireAuth, async (req, res) => {
-  const { logs } = req.body; // array of log entries
+  const { logs } = req.body;
   if (!Array.isArray(logs) || logs.length === 0) return res.json({ ok: true });
   try {
     for (const log of logs) {
       await pool.query(`INSERT INTO session_logs(id,user_id,user_name,user_type,view_name,entered_at,exited_at,duration_sec,ip_address,session_id,data)
         VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
-        ON CONFLICT(id) DO UPDATE SET exited_at=$7, duration_sec=$8, updated_at=NOW()`,
+        ON CONFLICT(id) DO UPDATE SET exited_at=$7, duration_sec=$8`,
         [log.id, log.userId, log.userName, log.userType, log.viewName,
          log.enteredAt, log.exitedAt||null, log.durationSec||null,
          req.ip||null, log.sessionId||null, JSON.stringify(log.data||{})]);
     }
     res.json({ ok: true });
-  } catch(e) { res.status(500).json({ error: e.message }); }
+  } catch(e) { console.error('[session-logs]', e.message); res.status(500).json({ error: e.message }); }
 });
 
 app.get('/api/session-logs', requireAuth, async (req, res) => {
