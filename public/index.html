@@ -1426,14 +1426,26 @@ const ReciboModal = ({ snap, cut, company, onClose }) => {
 
     const handlePrint = () => {
         const w = window.open('','_blank','width=800,height=900');
-        const companyName = (company&&company.name)||'Empresa';
+        // ── Datos completos de la empresa desde la configuración ──
+        const co = company || {};
+        const companyName = co.name || 'Empresa';
+        const companyTagline = co.tagline || '';
+        const companyAddr = co.address || '';
+        const country = snap.country || 'MX';
+        const companyCity = (co.cities && co.cities[country]) || '';
+        const companyTaxId = (co.taxId && co.taxId[country]) || '';
+        const companyPhone = co.phone || '';
+        const companyEmail = co.email || '';
+        const companyWebsite = co.website || '';
+        const taxIdLabel = country==='MX'?'RFC':country==='US'?'EIN':country==='RD'?'RNC':country==='SV'?'NIT':'Tax ID';
         const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
         <title>Recibo de Nómina — ${snap.name}</title>
         <style>
             body { font-family: Arial, sans-serif; margin: 0; padding: 20px; color: #000; font-size: 12px; }
             .header { background: #1B3A5C; color: white; padding: 16px 20px; margin-bottom: 16px; }
             .header h1 { margin:0; font-size:20px; }
-            .header p  { margin:4px 0 0; font-size:11px; opacity:.8; }
+            .header .sub { margin:4px 0 0; font-size:11px; opacity:.85; }
+            .header .addr { font-size:10px; opacity:.75; margin-top:6px; line-height:1.5; }
             .info-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:16px; }
             .info-box { border:1px solid #ddd; padding:10px 12px; }
             .info-box label { font-size:9px; color:#888; text-transform:uppercase; display:block; margin-bottom:2px; }
@@ -1446,12 +1458,18 @@ const ReciboModal = ({ snap, cut, company, onClose }) => {
             .neto { background:#1B3A5C; color:white; padding:16px 20px; text-align:center; margin-top:16px; }
             .neto .label { font-size:11px; opacity:.8; }
             .neto .amount { font-size:28px; font-weight:900; }
-            .footer { text-align:center; font-size:9px; color:#aaa; margin-top:20px; border-top:1px solid #eee; padding-top:12px; }
+            .footer { text-align:center; font-size:9px; color:#aaa; margin-top:20px; border-top:1px solid #eee; padding-top:12px; line-height:1.6; }
             @media print { body { margin:0; } }
         </style></head><body>
         <div class="header">
             <h1>${companyName}</h1>
-            <p>Recibo de Nómina · ${cut.period||cut.date||''}</p>
+            ${companyTagline ? `<div class="sub">${companyTagline}</div>` : ''}
+            <div class="addr">
+                ${companyAddr ? companyAddr + (companyCity ? ' · ' + companyCity : '') : (companyCity || '')}
+                ${companyTaxId ? '<br/>' + taxIdLabel + ': ' + companyTaxId : ''}
+                ${(companyPhone || companyEmail || companyWebsite) ? '<br/>' + [companyPhone, companyEmail, companyWebsite].filter(Boolean).join(' · ') : ''}
+            </div>
+            <div class="sub" style="margin-top:8px;border-top:1px solid rgba(255,255,255,0.2);padding-top:6px;">Recibo de Nómina · ${cut.period||cut.date||''}</div>
         </div>
         <div class="info-grid">
             <div class="info-box"><label>Empleado</label><span>${snap.name}</span></div>
@@ -1487,7 +1505,10 @@ const ReciboModal = ({ snap, cut, company, onClose }) => {
                 <div style="border-top:1px solid #000;padding-top:6px;font-size:10px;color:#888">Firma Autorizada</div>
             </div>
         </div>
-        <div class="footer">Este recibo fue generado por TimeClock Enterprise · ${new Date().toLocaleDateString('es-MX')} · Tasa efectiva: ${snap.effectiveRate||0}%</div>
+        <div class="footer">
+            ${companyName}${companyAddr ? ' · ' + companyAddr : ''}${companyCity ? ' · ' + companyCity : ''}<br/>
+            Generado el ${new Date().toLocaleDateString('es-MX')} · Tasa efectiva: ${snap.effectiveRate||0}%
+        </div>
         </body></html>`;
         w.document.write(html);
         w.document.close();
@@ -1500,7 +1521,7 @@ const ReciboModal = ({ snap, cut, company, onClose }) => {
             onClick: e => e.stopPropagation() },
             // Header
             React.createElement('div', { style:{ background:'#1B3A5C', padding:'16px 20px', borderRadius:'12px 12px 0 0' } },
-                React.createElement('div', { style:{ display:'flex', alignItems:'center', justifyContent:'space-between' } },
+                React.createElement('div', { style:{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom: company?.name ? 10 : 0 } },
                     React.createElement('div', null,
                         React.createElement('div', { style:{ fontSize:16, fontWeight:900, color:'#fff' } }, snap.name),
                         React.createElement('div', { style:{ fontSize:11, color:'#94a3b8', marginTop:2 } }, 'Recibo de Nómina · ' + (cut.period||cut.date||''))),
@@ -1509,7 +1530,17 @@ const ReciboModal = ({ snap, cut, company, onClose }) => {
                             style:{ padding:'7px 14px', background:'#22c55e22', border:'1px solid #22c55e66', color:'#22c55e', fontFamily:'monospace', fontSize:10, fontWeight:700, cursor:'pointer', borderRadius:4 } },
                             '🖨 PDF'),
                         React.createElement('button', { onClick: onClose,
-                            style:{ padding:'7px 12px', background:'transparent', border:'1px solid #334', color:'#888', fontFamily:'monospace', fontSize:12, cursor:'pointer', borderRadius:4 } }, '✕')))),
+                            style:{ padding:'7px 12px', background:'transparent', border:'1px solid #334', color:'#888', fontFamily:'monospace', fontSize:12, cursor:'pointer', borderRadius:4 } }, '✕'))),
+                // Company info
+                company && company.name && React.createElement('div', { style:{ paddingTop:8, borderTop:'1px solid rgba(255,255,255,0.15)' } },
+                    React.createElement('div', { style:{ fontSize:13, fontWeight:700, color:'#fff' } }, company.name),
+                    company.tagline && React.createElement('div', { style:{ fontSize:9, color:'#94a3b8', fontStyle:'italic', marginTop:2 } }, company.tagline),
+                    (company.address || (company.cities && company.cities[snap.country])) && React.createElement('div', { style:{ fontSize:9, color:'#94a3b8', marginTop:4 } },
+                        [company.address, company.cities && company.cities[snap.country]].filter(Boolean).join(' · ')),
+                    company.taxId && company.taxId[snap.country] && React.createElement('div', { style:{ fontSize:9, color:'#94a3b8', marginTop:2 } },
+                        ({MX:'RFC',US:'EIN',RD:'RNC',SV:'NIT'}[snap.country]||'Tax ID') + ': ' + company.taxId[snap.country]),
+                    (company.phone || company.email || company.website) && React.createElement('div', { style:{ fontSize:8, color:'#94a3b8', marginTop:2 } },
+                        [company.phone, company.email, company.website].filter(Boolean).join(' · ')))),
 
             // Employee info
             React.createElement('div', { style:{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, padding:16, borderBottom:'1px solid #334' } },
@@ -5120,14 +5151,19 @@ const PaySlipInner = ({ cut, snap, db, isPreview = false }) => {
     const irsInfo = snap.irsInformative || false;
     // ── Datos de la empresa desde db.company (configurables) ──
     const co = (db === null || db === void 0 ? void 0 : db.company) || {};
-    const companyName = co.name || "TIMECLOCK ENTERPRISE LLC";
-    const companyAddr = (loc === null || loc === void 0 ? void 0 : loc.address) || co.address || "1100 Wilshire Blvd, Suite 800";
+    const companyName = co.name || "EMPRESA";
+    const companyTagline = co.tagline || "";
+    const companyAddr = (loc === null || loc === void 0 ? void 0 : loc.address) || co.address || "";
     const _coCity = co.cities || {};
-    const companyCityStateZip = isUS ? (_coCity.US || "LOS ANGELES, CA 90017")
-        : isMX ? (_coCity.MX || "CIUDAD DE MÉXICO, CDMX 06600")
-            : isRD ? (_coCity.RD || "SANTO DOMINGO, REPÚBLICA DOMINICANA")
-                : (_coCity.SV || "SAN SALVADOR, EL SALVADOR");
+    const companyCityStateZip = isUS ? (_coCity.US || "")
+        : isMX ? (_coCity.MX || "")
+            : isRD ? (_coCity.RD || "")
+                : (_coCity.SV || "");
     const companyTaxId = co.taxId ? (isUS ? (co.taxId.US || "") : isMX ? (co.taxId.MX || "") : isRD ? (co.taxId.RD || "") : (co.taxId.SV || "")) : "";
+    const companyPhone = co.phone || "";
+    const companyEmail = co.email || "";
+    const companyWebsite = co.website || "";
+    const taxIdLabel = isMX?"RFC":isUS?"EIN":isRD?"RNC":isSV?"NIT":"Tax ID";
     const hoursReg = (_c = snap.hoursReg) !== null && _c !== void 0 ? _c : null;
     const hoursOT = (_d = snap.hoursOT) !== null && _d !== void 0 ? _d : 0;
     const hoursDouble = snap.hoursDouble || 0;
@@ -5205,8 +5241,12 @@ const PaySlipInner = ({ cut, snap, db, isPreview = false }) => {
             React.createElement("div", null,
                 React.createElement("div", { style: { fontFamily: "Arial,sans-serif", fontSize: 10, marginBottom: 2 } }, ["CO.", "DEPT.", "CLOCK", "EMP. NO."].map(t => (React.createElement("span", { key: t, style: { display: "inline-block", border: `1px solid ${C.border}`, padding: "1px 6px", fontSize: 8, marginRight: 4, color: C.dimText } }, t)))),
                 React.createElement("div", { style: { fontFamily: "Arial,sans-serif", fontSize: 11, fontWeight: "bold", marginTop: 6 } }, companyName),
-                React.createElement("div", { style: { fontFamily: "Arial,sans-serif", fontSize: 9, color: C.dimText } }, companyAddr),
-                React.createElement("div", { style: { fontFamily: "Arial,sans-serif", fontSize: 9, color: C.dimText } }, companyCityStateZip)),
+                companyTagline && React.createElement("div", { style: { fontFamily: "Arial,sans-serif", fontSize: 8, color: C.dimText, fontStyle: "italic" } }, companyTagline),
+                companyAddr && React.createElement("div", { style: { fontFamily: "Arial,sans-serif", fontSize: 9, color: C.dimText, marginTop: 2 } }, companyAddr),
+                companyCityStateZip && React.createElement("div", { style: { fontFamily: "Arial,sans-serif", fontSize: 9, color: C.dimText } }, companyCityStateZip),
+                companyTaxId && React.createElement("div", { style: { fontFamily: "Arial,sans-serif", fontSize: 9, color: C.dimText, marginTop: 2 } }, taxIdLabel + ": " + companyTaxId),
+                (companyPhone || companyEmail) && React.createElement("div", { style: { fontFamily: "Arial,sans-serif", fontSize: 8, color: C.dimText, marginTop: 2 } }, [companyPhone, companyEmail].filter(Boolean).join(" · ")),
+                companyWebsite && React.createElement("div", { style: { fontFamily: "Arial,sans-serif", fontSize: 8, color: C.dimText } }, companyWebsite)),
             React.createElement("div", { style: { textAlign: "center" } },
                 React.createElement("div", { style: { fontFamily: "Arial,sans-serif", fontSize: 16, fontWeight: "bold", letterSpacing: 1, marginBottom: 6 } },
                     "Earnings Statement",
@@ -5226,7 +5266,7 @@ const PaySlipInner = ({ cut, snap, db, isPreview = false }) => {
                 React.createElement("div", { style: { fontFamily: "Arial,sans-serif", fontSize: 11, fontWeight: "bold" } }, snap.name),
                 React.createElement("div", { style: { fontFamily: "Arial,sans-serif", fontSize: 9, color: C.dimText } }, snap.role),
                 React.createElement("div", { style: { fontFamily: "Arial,sans-serif", fontSize: 9, color: C.dimText } }, snap.location),
-                React.createElement("div", { style: { fontFamily: "Arial,sans-serif", fontSize: 9, color: C.dimText } }, isUS ? "FREMONT CA 94538" : isMX ? "CIUDAD DE MÉXICO, 06600" : isRD ? "SANTO DOMINGO, RD" : isSV ? "SAN SALVADOR, SV" : ""))),
+                React.createElement("div", { style: { fontFamily: "Arial,sans-serif", fontSize: 9, color: C.dimText } }, companyCityStateZip || ""))),
         React.createElement("div", { style: { display: "flex", gap: 20, marginBottom: 4, padding: "4px 0", borderBottom: `1px solid ${C.border}`, flexWrap: "wrap" } },
             isUS && React.createElement(React.Fragment, null,
                 React.createElement("div", { style: { fontFamily: "Arial,sans-serif", fontSize: 8.5, color: C.dimText } },
@@ -5480,8 +5520,9 @@ const PaySlipInner = ({ cut, snap, db, isPreview = false }) => {
             React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start" } },
                 React.createElement("div", null,
                     React.createElement("div", { style: { fontFamily: "Arial,sans-serif", fontSize: 10, fontWeight: "bold" } }, companyName),
-                    React.createElement("div", { style: { fontFamily: "Arial,sans-serif", fontSize: 8.5, color: C.dimText } }, companyAddr),
-                    React.createElement("div", { style: { fontFamily: "Arial,sans-serif", fontSize: 8.5, color: C.dimText } }, companyCityStateZip)),
+                    companyAddr && React.createElement("div", { style: { fontFamily: "Arial,sans-serif", fontSize: 8.5, color: C.dimText } }, companyAddr),
+                    companyCityStateZip && React.createElement("div", { style: { fontFamily: "Arial,sans-serif", fontSize: 8.5, color: C.dimText } }, companyCityStateZip),
+                    companyTaxId && React.createElement("div", { style: { fontFamily: "Arial,sans-serif", fontSize: 8.5, color: C.dimText, marginTop: 2 } }, taxIdLabel + ": " + companyTaxId)),
                 React.createElement("div", { style: { textAlign: "center" } },
                     React.createElement("div", { style: { fontFamily: "Arial,sans-serif", fontSize: 8.5, color: C.dimText } }, "Advice number:"),
                     React.createElement("div", { style: { fontFamily: "Arial,sans-serif", fontSize: 10, fontWeight: "bold" } },
