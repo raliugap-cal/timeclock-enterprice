@@ -5834,7 +5834,6 @@ const ViewBI = ({ db }) => {
         React.createElement("div", { style: { display: "flex", gap: 0, borderBottom: `1px solid ${DS.border}`, marginBottom: 20 } }, [
             { id: "overview", label: "RESUMEN GENERAL", icon: BarChart2 },
             { id: "nomina", label: "DETALLE DE NÓMINA", icon: DollarSign },
-            { id: "usage", label: "USO POR USUARIO", icon: Activity },
         ].map(t => (React.createElement("button", { key: t.id, onClick: () => setBiTab(t.id), style: { display: "flex", alignItems: "center", gap: 7, padding: "10px 20px", border: "none", cursor: "pointer",
                 background: biTab === t.id ? `${DS.glow}10` : "transparent",
                 color: biTab === t.id ? DS.glow : DS.textDim,
@@ -6363,8 +6362,7 @@ const ViewBI = ({ db }) => {
                     React.createElement("div", { style: { fontFamily: DS.mono, fontSize: 9, color: DS.glowAmber } },
                         nfTotalGross > 0 ? ((nfTotalDed / nfTotalGross) * 100).toFixed(1) : 0,
                         "%"),
-                    React.createElement("div", null))),
-        biTab === "usage" && React.createElement(ViewUsageReport, null)));
+                    React.createElement("div", null)))));
 };
 
 // ══════════════════════════════════════════════════════════════════════
@@ -9405,6 +9403,7 @@ const getAllModules = (t) => [
     { id: "dispersion", label: t("nav_dispersion"), icon: Zap, group: "admin", desc: "Pago bancario y verificación CLABE" },
     { id: "reportes",   label: "REPORTES",          icon: ClipboardList, group: "admin", desc: "IMSS · SAT · Gerencial · Autorización" },
     { id: "reports",    label: t("nav_reports"),    icon: BarChart3, group: "admin", desc: t("perm_bi_advanced") },
+    { id: "usage",      label: "Uso por Usuario",   icon: Activity,  group: "admin", desc: "Tiempo de navegación por usuario" },
     { id: "permisos", label: t("nav_permisos"), icon: Shield, group: "admin", desc: "Este módulo — gestión de roles y acceso" },
     // Portal empleado
     { id: "portal_clock", label: "Checar Entrada/Salida", icon: Clock, group: "employee", desc: t("perm_portal_clock") },
@@ -13393,6 +13392,7 @@ const NAV = [
     { id: "dispersion", icon: Zap,          tkey: "nav_dispersion" },
     { id: "reportes",   icon: ClipboardList, tkey: "nav_reportes"  },
     { id: "reports",    icon: BarChart3,     tkey: "nav_reports"   },
+    { id: "usage",      icon: Activity,      tkey: null, label: "Uso por Usuario" },
     { id: "permisos", icon: Shield, tkey: "nav_permisos" },
 ];
 // ═══════════════════════════════════════════════
@@ -13643,7 +13643,7 @@ function App() {
                             marginTop: isPermisos ? "auto" : 0,
                         } },
                         React.createElement(n.icon, { size: 14 }),
-                        React.createElement("span", { style: { flex: 1 } }, t(n.tkey)),
+                        React.createElement("span", { style: { flex: 1 } }, n.tkey ? t(n.tkey) : n.label),
                         badge > 0 && (React.createElement("span", { style: { minWidth: 18, height: 18, borderRadius: 9, background: badgeColor, color: "#fff", fontFamily: DS.sans, fontSize: 10, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 5px" } }, badge))));
                 })),
                 // DB status
@@ -13692,6 +13692,7 @@ function App() {
                 view === "dispersion" && React.createElement(ViewDispersion, { db: db, upsertEmployee: upsertEmployee, updatePayrollCut: updatePayrollCut }),
                 view === "reportes" && React.createElement(ViewReportesNomina, { db: db, updatePayrollCut: updatePayrollCut, reloadFromAPI: reloadFromAPI, loading: loading }),
                 view === "reports" && React.createElement(ViewBI, { db: db }),
+                view === "usage"   && React.createElement(ViewUsageReport, null),
                 view === "permisos" && React.createElement(ViewPermisos, { db: db, upsertSystemUser: upsertSystemUser, deleteSystemUser: deleteSystemUser, updateAccessRule: updateAccessRule, updateUserOverrides: updateUserOverrides, updateCompany: updateCompany }))),
             // ── GLOBAL OFFER TOAST (visible desde cualquier módulo) ──
             globalToast && React.createElement("div", {
