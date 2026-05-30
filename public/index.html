@@ -869,6 +869,59 @@ const getHoursFromRecords = (empId, db, from, to) => {
     return r2(records.reduce((s, r) => s + (r.hours || 0), 0));
 };
 
+// Hours breakdown: regular + overtime + double + by day
+const getHoursBreakdown = (empId, db, from, to) => {
+    if (!db || !db.timeRecords || !from || !to) return null;
+    const records = db.timeRecords.filter(r => {
+        if (r.empId !== empId) return false;
+        if (!r.date || !r.hours || r.hours <= 0) return false;
+        if (r.exit === null) return false;
+        const isApproved = r.approved || r.type === "geocerca";
+        if (!isApproved) return false;
+        return r.date >= from && r.date <= to;
+    });
+    if (records.length === 0) return null;
+
+    // Group by day, then categorize hours
+    const dayMap = {};
+    records.forEach(r => {
+        if (!dayMap[r.date]) dayMap[r.date] = { date: r.date, regular: 0, overtime: 0, double: 0, total: 0, records: [] };
+        dayMap[r.date].total += r.hours;
+        dayMap[r.date].records.push(r);
+    });
+
+    // Apply overtime rules per day: >8h regular = OT, >12h = double (Mexico law standard)
+    Object.values(dayMap).forEach(d => {
+        const isWeekend = new Date(d.date+'T00:00:00').getDay() === 0 || new Date(d.date+'T00:00:00').getDay() === 6;
+        if (isWeekend) {
+            // Weekend: all hours are double (séptimo día / sábado especial)
+            d.regular = 0;
+            d.double = d.total;
+            d.overtime = 0;
+        } else if (d.total <= 8) {
+            d.regular = d.total;
+        } else if (d.total <= 12) {
+            d.regular = 8;
+            d.overtime = d.total - 8;
+        } else {
+            d.regular = 8;
+            d.overtime = 4;
+            d.double = d.total - 12;
+        }
+    });
+
+    const days = Object.values(dayMap).sort((a,b) => a.date.localeCompare(b.date));
+    return {
+        days,
+        regular: r2(days.reduce((s,d) => s + d.regular, 0)),
+        overtime: r2(days.reduce((s,d) => s + d.overtime, 0)),
+        double: r2(days.reduce((s,d) => s + d.double, 0)),
+        total: r2(days.reduce((s,d) => s + d.total, 0)),
+        daysWorked: days.length,
+        recordsCount: records.length,
+    };
+};
+
 // ─────────────────────────────────────────────────────────
 //  FUENTE ÚNICA DE VERDAD — calcPayrollFromDB
 //
@@ -4060,6 +4113,51 @@ const PayrollResultModal = ({ data, onClose, savePayrollCut }) => {
                                         "%")),
                                 React.createElement("div", { style: { color: isExp ? DS.glow : DS.textDim, display: "flex" } }, isExp ? React.createElement(ChevronUp, { size: 14 }) : React.createElement(ChevronDown, { size: 14 }))),
                             isExp && (React.createElement("div", { style: { borderTop: `1px solid ${DS.border}`, background: DS.bgAlt } },
+                                // ── RESUMEN DE HORAS TRABAJADAS ───────────────
+                                (() => {
+                                    const hb = getHoursBreakdown(emp.id, db, form.from, form.to);
+                                    if (!hb) return React.createElement("div", { style: { padding: "12px 16px", background: `${DS.glow}05`, borderBottom: `1px solid ${DS.border}` } },
+                                        React.createElement("div", { style: { fontFamily: DS.mono, fontSize: 9, color: DS.textDim, letterSpacing: "0.1em", marginBottom: 4 } }, "⏱ HORAS TRABAJADAS EN EL PERÍODO"),
+                                        React.createElement("div", { style: { fontFamily: DS.mono, fontSize: 11, color: DS.textDim } },
+                                            "Sin registros de tiempo aprobados entre ", form.from || "—", " y ", form.to || "—"));
+                                    return React.createElement("div", { style: { padding: "14px 16px", background: `${DS.glowGreen}06`, borderBottom: `1px solid ${DS.border}` } },
+                                        React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 } },
+                                            React.createElement("div", { style: { fontFamily: DS.mono, fontSize: 9, color: DS.glowGreen, fontWeight: 700, letterSpacing: "0.1em" } },
+                                                "⏱ HORAS TRABAJADAS EN EL PERÍODO " + (form.from || "") + " → " + (form.to || "")),
+                                            React.createElement("div", { style: { fontFamily: DS.mono, fontSize: 9, color: DS.textDim } }, hb.daysWorked + " días · " + hb.recordsCount + " registros")),
+                                        // Summary cards
+                                        React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 10 } },
+                                            [
+                                                { l: "REGULARES", v: hb.regular, c: DS.text, sub: "≤ 8h/día" },
+                                                { l: "EXTRAS", v: hb.overtime, c: DS.glowAmber, sub: "8-12h/día (×2)" },
+                                                { l: "DOBLES", v: hb.double, c: DS.glowRed, sub: ">12h o fin sem (×3)" },
+                                                { l: "TOTAL", v: hb.total, c: DS.glowGreen, sub: "horas del período" },
+                                            ].map(k => React.createElement("div", { key: k.l, style: { padding: "10px 12px", background: DS.surface, border: `1px solid ${DS.border}` } },
+                                                React.createElement("div", { style: { fontFamily: DS.mono, fontSize: 8, color: DS.textDim, marginBottom: 3 } }, k.l),
+                                                React.createElement("div", { style: { fontFamily: DS.mono, fontSize: 16, fontWeight: 900, color: k.c } }, k.v + "h"),
+                                                React.createElement("div", { style: { fontFamily: DS.mono, fontSize: 7, color: DS.textDim, marginTop: 2 } }, k.sub)))),
+                                        // Day-by-day breakdown
+                                        React.createElement("div", { style: { background: DS.surface, border: `1px solid ${DS.border}`, padding: "8px 10px" } },
+                                            React.createElement("div", { style: { fontFamily: DS.mono, fontSize: 8, color: DS.textDim, marginBottom: 6, letterSpacing: "0.08em" } }, "DETALLE POR DÍA"),
+                                            React.createElement("div", { style: { display: "grid", gridTemplateColumns: "auto repeat(4, 1fr)", gap: "4px 12px", fontSize: 10, fontFamily: DS.mono } },
+                                                React.createElement("div", { style: { color: DS.textDim, fontSize: 8 } }, "FECHA"),
+                                                React.createElement("div", { style: { color: DS.textDim, fontSize: 8, textAlign: "right" } }, "REG."),
+                                                React.createElement("div", { style: { color: DS.textDim, fontSize: 8, textAlign: "right" } }, "EXTRA"),
+                                                React.createElement("div", { style: { color: DS.textDim, fontSize: 8, textAlign: "right" } }, "DOBLE"),
+                                                React.createElement("div", { style: { color: DS.textDim, fontSize: 8, textAlign: "right" } }, "TOTAL"),
+                                                ...hb.days.flatMap(d => {
+                                                    const dow = new Date(d.date+'T00:00:00').toLocaleDateString('es-MX',{weekday:'short',day:'numeric',month:'short'});
+                                                    const isWeekend = new Date(d.date+'T00:00:00').getDay() === 0 || new Date(d.date+'T00:00:00').getDay() === 6;
+                                                    return [
+                                                        React.createElement("div", { key: d.date+"_d", style: { color: isWeekend ? DS.glowAmber : DS.text } }, dow),
+                                                        React.createElement("div", { key: d.date+"_r", style: { color: DS.text, textAlign: "right" } }, d.regular > 0 ? d.regular+"h" : "—"),
+                                                        React.createElement("div", { key: d.date+"_o", style: { color: d.overtime > 0 ? DS.glowAmber : DS.textDim, textAlign: "right", fontWeight: d.overtime > 0 ? 700 : 400 } }, d.overtime > 0 ? d.overtime+"h" : "—"),
+                                                        React.createElement("div", { key: d.date+"_x", style: { color: d.double > 0 ? DS.glowRed : DS.textDim, textAlign: "right", fontWeight: d.double > 0 ? 700 : 400 } }, d.double > 0 ? d.double+"h" : "—"),
+                                                        React.createElement("div", { key: d.date+"_t", style: { color: DS.glowGreen, fontWeight: 700, textAlign: "right" } }, d.total+"h"),
+                                                    ];
+                                                })))
+                                    );
+                                })(),
                                 React.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, padding: "16px" } },
                                     React.createElement("div", null,
                                         React.createElement("div", { style: { fontFamily: DS.mono, fontSize: 9, color: DS.textDim, letterSpacing: "0.12em", marginBottom: 10 } }, "DESGLOSE DE RETENCIONES"),
