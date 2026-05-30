@@ -6549,7 +6549,7 @@ const ViewUsageReport = () => {
                                 React.createElement('thead', null,
                                     React.createElement('tr', {style:{borderBottom:`1px solid ${DS.border}`}},
                                         ['FECHA/HORA','MÓDULO','DURACIÓN'].map(h=>
-                                            React.createElement('th', {key:h,style:{padding:'6px 8px',textAlign:h==='DURACIÓN'?'right':'left',color:DS.textDim,fontSize:9,fontWeight:700,letterSpacing:'0.06em'}}), h))),
+                                            React.createElement('th', {key:h,style:{padding:'6px 8px',textAlign:h==='DURACIÓN'?'right':'left',color:DS.textDim,fontSize:9,fontWeight:700,letterSpacing:'0.06em'}}, h)))),
                                 React.createElement('tbody', null,
                                     userLogs.map((log,i) =>
                                         React.createElement('tr', {key:log.id,style:{borderBottom:`1px solid ${DS.border}22`,background:i%2===0?'transparent':`${DS.glow}03`}},
