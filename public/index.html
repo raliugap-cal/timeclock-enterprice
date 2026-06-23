@@ -1361,7 +1361,7 @@ const LoginScreen = ({ db, onLoginAdmin, onLoginEmployee, onServerLogin, activeE
         if (!username || !password) { setError(t('login_fill_all')); return; }
         if (window.TC_API.IS_SERVER) {
             window.TC_API.login(username, password)
-                .then(data => { if (onServerLogin) onServerLogin(data.user); })
+                .then(data => { if (onServerLogin) onServerLogin(data); })
                 .catch(() => setError(t('login_error_user')));
         } else {
             if (!onLoginAdmin(username, password)) setError(t('login_error_user'));
@@ -14115,7 +14115,7 @@ function App() {
         setTheme(next);
     };
     const { db, loading, reloadFromAPI, upsertEmployee, deleteEmployee, upsertLocation, deleteLocation, upsertDepartment, deleteDepartment, addTimeRecord, updateTimeRecord, savePayrollCut, updatePayrollCut, resetDB, upsertSystemUser, deleteSystemUser, updateAccessRule, updateUserOverrides, updateTaxYtd, updateCompany } = useDB();
-    const { session, checking, loginAdmin, loginEmployee, serverLogin, logout, inactivityWarning, resetInactivityTimer } = useAuth(db, reloadFromAPI);
+    const { session, checking, loginAdmin, loginEmployee, serverLogin, logout, inactivityWarning, resetInactivityTimer, tenantOptions, tenantSelecting, selectTenant } = useAuth(db, reloadFromAPI);
 
     // ── Active employees list — loaded once at App level, passed to LoginScreen ──
     const [activeEmpsGlobal, setActiveEmpsGlobal] = useState(null);
@@ -14153,10 +14153,30 @@ function App() {
                 React.createElement("div", { style: { textAlign: "center" } },
                     React.createElement(Loader2, { size: 32, color: DS.glow, style: { animation: "spin 1s linear infinite", marginBottom: 16 } }),
                     React.createElement("div", { style: { color: DS.textDim, fontSize: 13, fontFamily: DS.sans, fontWeight: 500 } }, t("loading"))))));
-    // Not logged in → Login screen
+    // Not logged in → Login screen (or tenant selector if multi-empresa)
     if (!session)
         return (React.createElement(Shell, null,
-            React.createElement(LoginScreen, { db: db,
+            tenantSelecting && tenantOptions
+            ? React.createElement("div", { style: { minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", background: DS.bg } },
+                React.createElement("div", { style: { background: DS.surface, border: `1px solid ${DS.border}`, borderRadius: 16, padding: 32, width: 360, boxShadow: `0 8px 32px #0008` } },
+                    React.createElement("div", { style: { fontSize: 20, fontWeight: 800, color: DS.text, marginBottom: 8, fontFamily: DS.sans } }, "Selecciona tu empresa"),
+                    React.createElement("div", { style: { fontSize: 13, color: DS.textDim, marginBottom: 24, fontFamily: DS.sans } }, "Tu usuario tiene acceso a múltiples empresas"),
+                    tenantOptions.map(t2 =>
+                        React.createElement("button", {
+                            key: t2.id,
+                            onClick: () => selectTenant(t2.id),
+                            style: { width:"100%", marginBottom: 10, padding: "14px 18px", background: `${DS.glow}12`, border: `1px solid ${DS.glow}40`, borderRadius: 10, color: DS.text, fontSize: 15, fontWeight: 700, fontFamily: DS.sans, cursor:"pointer", textAlign:"left", display:"flex", alignItems:"center", gap:10, transition:"all .15s" }
+                        },
+                            React.createElement("span", { style: { fontSize: 22 } }, "🏢"),
+                            React.createElement("div", null,
+                                React.createElement("div", { style: { fontSize: 14, fontWeight: 700 } }, t2.name || t2.id),
+                                React.createElement("div", { style: { fontSize: 11, color: DS.textDim, fontWeight: 400 } }, t2.role)
+                            )
+                        )
+                    )
+                )
+              )
+            : React.createElement(LoginScreen, { db: db,
                 onLoginAdmin: loginAdmin,
                 onServerLogin: serverLogin,
                 onLoginEmployee: loginEmployee,
