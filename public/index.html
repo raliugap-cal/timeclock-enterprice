@@ -54,6 +54,10 @@ window.TC_API = (function() {
         logout:   ()      => api('POST', '/api/auth/logout'),
         whoAmI:   ()      => api('GET',  '/api/auth/me'),
         loadDB:   ()      => api('GET',  '/api/db'),
+        // ── Multi-tenant ──────────────────────────────────────────────
+        selectTenant: (tenantId) => api('POST', '/api/auth/select-tenant', { tenantId }),
+        getTenants:   ()         => api('GET',  '/api/auth/tenants'),
+        // ── Fiscal periods ───────────────────────────────────────────
         getFiscalPeriods:  () => api('GET',  '/api/fiscal-periods'),
         saveFiscalPeriod:  (id, data) => api('PUT', `/api/fiscal-periods/${id}`, data),
         closeFiscalPeriod: (id) => api('POST', `/api/fiscal-periods/${id}/close`, {}),
@@ -218,6 +222,7 @@ const Fingerprint = ({size=24,color="currentColor",style={}}) => React.createEle
 const ScanLine = ({size=24,color="currentColor",style={}}) => React.createElement("svg",{xmlns:"http://www.w3.org/2000/svg",width:size,height:size,viewBox:"0 0 24 24",fill:"none",stroke:color,strokeWidth:2,strokeLinecap:"round",strokeLinejoin:"round",style},React.createElement("g",{dangerouslySetInnerHTML:{__html:'<path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="7" y1="12" x2="17" y2="12"/>'}}) );
 const Network = ({size=24,color="currentColor",style={}}) => React.createElement("svg",{xmlns:"http://www.w3.org/2000/svg",width:size,height:size,viewBox:"0 0 24 24",fill:"none",stroke:color,strokeWidth:2,strokeLinecap:"round",strokeLinejoin:"round",style},React.createElement("g",{dangerouslySetInnerHTML:{__html:'<rect x="9" y="2" width="6" height="6" rx="1"/><rect x="16" y="16" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><path d="M5 16v-4a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v4"/><line x1="12" y1="8" x2="12" y2="11"/>'}}) );
 const GitBranch = ({size=24,color="currentColor",style={}}) => React.createElement("svg",{xmlns:"http://www.w3.org/2000/svg",width:size,height:size,viewBox:"0 0 24 24",fill:"none",stroke:color,strokeWidth:2,strokeLinecap:"round",strokeLinejoin:"round",style},React.createElement("g",{dangerouslySetInnerHTML:{__html:'<line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>'}}) );
+const BookOpen = ({size=24,color="currentColor",style={}}) => React.createElement("svg",{xmlns:"http://www.w3.org/2000/svg",width:size,height:size,viewBox:"0 0 24 24",fill:"none",stroke:color,strokeWidth:2,strokeLinecap:"round",strokeLinejoin:"round",style},React.createElement("g",{dangerouslySetInnerHTML:{__html:'<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>'}}) );
 const PieChart = ({size=24,color="currentColor",style={}}) => React.createElement("svg",{xmlns:"http://www.w3.org/2000/svg",width:size,height:size,viewBox:"0 0 24 24",fill:"none",stroke:color,strokeWidth:2,strokeLinecap:"round",strokeLinejoin:"round",style},React.createElement("g",{dangerouslySetInnerHTML:{__html:'<path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/>'}}) );
 const Inbox = ({size=24,color="currentColor",style={}}) => React.createElement("svg",{xmlns:"http://www.w3.org/2000/svg",width:size,height:size,viewBox:"0 0 24 24",fill:"none",stroke:color,strokeWidth:2,strokeLinecap:"round",strokeLinejoin:"round",style},React.createElement("g",{dangerouslySetInnerHTML:{__html:'<polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>'}}) );
 const Bell = ({size=24,color="currentColor",style={}}) => React.createElement("svg",{xmlns:"http://www.w3.org/2000/svg",width:size,height:size,viewBox:"0 0 24 24",fill:"none",stroke:color,strokeWidth:2,strokeLinecap:"round",strokeLinejoin:"round",style},React.createElement("g",{dangerouslySetInnerHTML:{__html:'<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>'}}) );
@@ -1173,13 +1178,37 @@ const useAuth = (db, reloadDB) => {
 
   const [session, setSession] = useState(null);
   const [checking, setChecking] = useState(true);
+  // Multi-tenant: when the admin belongs to multiple companies, the backend
+  // returns needsTenantSelection=true and a list of available tenants.
+  // We show a selector modal before activating the session.
+  const [tenantOptions, setTenantOptions] = useState(null);   // null | Array<{id,name,role}>
+  const [tenantSelecting, setTenantSelecting] = useState(false);
 
   // On mount: check server session OR restore local session
   useEffect(() => {
     if (window.TC_API.IS_SERVER) {
       // 401 is expected when not logged in — not an error
       window.TC_API.whoAmI()
-        .then(data => { setSession({ type: data.user.type || 'admin', user: data.user }); window.NavTracker && window.NavTracker.setUser(data.user); })
+        .then(data => {
+          // If whoAmI returns a session without tenantId it means the token is
+          // provisional (multi-tenant, pending selection).  Re-fetch tenant list.
+          if (data.user && !data.user.tenantId) {
+            window.TC_API.getTenants()
+              .then(tenants => {
+                if (tenants.length === 1) {
+                  // Auto-select the only tenant
+                  return window.TC_API.selectTenant(tenants[0].id)
+                    .then(r => { setSession({ type: r.user.type||'admin', user: r.user }); window.NavTracker && window.NavTracker.setUser(r.user); });
+                }
+                setTenantOptions(tenants);
+                setTenantSelecting(true);
+              })
+              .catch(() => setSession(null));
+          } else {
+            setSession({ type: data.user.type || 'admin', user: data.user });
+            window.NavTracker && window.NavTracker.setUser(data.user);
+          }
+        })
         .catch(() => { /* 401 = not logged in, expected */ setSession(null); })
         .finally(() => setChecking(false));
     } else {
@@ -1231,12 +1260,45 @@ const useAuth = (db, reloadDB) => {
     setTimeout(() => window.location.reload(), 50);
   }, []);
 
-  // Called after server sets cookie — just activate React state
-  const serverLogin = useCallback((user) => {
+  // Called after server sets cookie — handles both single-tenant (direct) and
+  // multi-tenant (needsTenantSelection) login responses.
+  const serverLogin = useCallback((loginResponse) => {
+    const { user, tenants, needsTenantSelection } = loginResponse;
+    if (needsTenantSelection && tenants && tenants.length > 1) {
+      // Show the tenant selector — do NOT activate session yet
+      setTenantOptions(tenants);
+      setTenantSelecting(true);
+      return;
+    }
+    // Single tenant or already resolved — activate session immediately
     const s = { type: user.type || 'admin', user };
     setSession(s);
+    setTenantSelecting(false);
+    setTenantOptions(null);
     window.NavTracker && window.NavTracker.setUser({ ...user, type: user.type||'admin' });
   }, []);
+
+  // Called when the user picks a company from the TenantSelectorModal
+  const selectTenant = useCallback((tenantId) => {
+    return window.TC_API.selectTenant(tenantId).then(r => {
+      const s = { type: r.user.type||'admin', user: r.user };
+      setSession(s);
+      setTenantSelecting(false);
+      setTenantOptions(null);
+      window.NavTracker && window.NavTracker.setUser(r.user);
+      if (reloadDB) reloadDB();
+    });
+  }, [reloadDB]);
+
+  // Called from the in-app company switcher (sidebar)
+  const switchTenant = useCallback((tenantId) => {
+    return window.TC_API.selectTenant(tenantId).then(r => {
+      const s = { type: r.user.type||'admin', user: r.user };
+      setSession(s);
+      window.NavTracker && window.NavTracker.setUser(r.user);
+      if (reloadDB) reloadDB();
+    });
+  }, [reloadDB]);
 
   // Local mode only
   const loginAdmin = useCallback((username, password) => {
@@ -1259,7 +1321,7 @@ const useAuth = (db, reloadDB) => {
     window.NavTracker && window.NavTracker.setUser({ ...emp, type:'employee', isEmployee:true });
   }, []);
 
-  return { session, checking, loginAdmin, loginEmployee, serverLogin, logout: doLogout, inactivityWarning, resetInactivityTimer };
+  return { session, checking, loginAdmin, loginEmployee, serverLogin, logout: doLogout, inactivityWarning, resetInactivityTimer, tenantOptions, tenantSelecting, selectTenant, switchTenant };
 };
 
 
