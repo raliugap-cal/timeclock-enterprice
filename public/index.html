@@ -10647,6 +10647,7 @@ const TRANSLATIONS = {
         rrhh_tab_employees: "Empleados",
         rrhh_tab_departments: "Departamentos y Puestos",
         rrhh_tab_locations: "Geocercas",
+        rrhh_tab_diccionario: "Diccionario RRHH",
         rrhh_pipeline: "Pipeline de Incorporación",
         rrhh_stage_prospect: "Prospecto",
         rrhh_stage_docs: "Documentación",
@@ -10952,8 +10953,7 @@ const TRANSLATIONS = {
         rrhh_tab_employees: "Employees",
         rrhh_tab_departments: "Departments & Positions",
         rrhh_tab_locations: "Geofences",
-        rrhh_pipeline: "Onboarding Pipeline",
-        rrhh_stage_prospect: "Prospect",
+        rrhh_tab_diccionario: "HR Dictionary",
         rrhh_stage_docs: "Documentation",
         rrhh_stage_induction: "Induction",
         rrhh_stage_active: "Active",
@@ -11255,7 +11255,7 @@ const TRANSLATIONS = {
         rrhh_tab_employees: "Dipendenti",
         rrhh_tab_departments: "Reparti e Posizioni",
         rrhh_tab_locations: "Geoclôture",
-        rrhh_pipeline: "Pipeline di Inserimento",
+        rrhh_tab_diccionario: "Dizionario HR",
         rrhh_stage_prospect: "Prospetto",
         rrhh_stage_docs: "Documentazione",
         rrhh_stage_induction: "Induzione",
@@ -11558,7 +11558,7 @@ const TRANSLATIONS = {
         rrhh_tab_employees: "Employés",
         rrhh_tab_departments: "Départements et Postes",
         rrhh_tab_locations: "Géofences",
-        rrhh_pipeline: "Pipeline d'Intégration",
+        rrhh_tab_diccionario: "Dictionnaire RH",
         rrhh_stage_prospect: "Prospect",
         rrhh_stage_docs: "Documentation",
         rrhh_stage_induction: "Induction",
@@ -11861,7 +11861,7 @@ const TRANSLATIONS = {
         rrhh_tab_employees: "Mitarbeiter",
         rrhh_tab_departments: "Abteilungen & Stellen",
         rrhh_tab_locations: "Geofences",
-        rrhh_pipeline: "Einarbeitungs-Pipeline",
+        rrhh_tab_diccionario: "HR-Wörterbuch",
         rrhh_stage_prospect: "Interessent",
         rrhh_stage_docs: "Dokumentation",
         rrhh_stage_induction: "Einarbeitung",
@@ -13094,6 +13094,371 @@ const ViewOrganigrama = ({ db }) => {
                     React.createElement('span', { style:{ fontSize:10, color:'#aaa', maxWidth:160, textAlign:'right', wordBreak:'break-all' } }, v))))));
 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// DICCIONARIO DE RRHH
+// 200+ términos profesionales con definiciones en español
+// ─────────────────────────────────────────────────────────────────────────────
+const DICT_DATA = [
+  // A
+  { t:"Absentismo", d:"Ausencia habitual del trabajador de su puesto de trabajo, ya sea justificada (baja médica) o injustificada. El seguimiento del absentismo es un indicador clave de salud organizacional y clima laboral.", cat:"Gestión de Personal" },
+  { t:"Accidente laboral", d:"Todo lesión corporal que el trabajador sufra con ocasión o por consecuencia del trabajo que ejecuta por cuenta ajena. Incluye los accidentes en trayecto (in itinere). Obliga al empleador a reportar ante el IMSS/Seguridad Social según el país.", cat:"Seguridad y Salud" },
+  { t:"Agile (método)", d:"Marco de trabajo iterativo e incremental para la gestión de proyectos, basado en ciclos cortos (sprints) y equipos autoorganizados. En RRHH se aplica para agilizar procesos de selección, formación y evaluación del desempeño.", cat:"Metodologías" },
+  { t:"AI-Driven Recruitment", d:"Uso de inteligencia artificial para automatizar y optimizar los procesos de reclutamiento: desde el cribado de CVs y entrevistas automatizadas hasta la predicción de ajuste cultural. Reduce sesgos y tiempos de contratación.", cat:"Reclutamiento" },
+  { t:"Analytics", d:"Aplicación de técnicas estadísticas y análisis de datos a los procesos de Recursos Humanos para tomar decisiones basadas en evidencia: rotación predictiva, análisis de clima, efectividad de formación, etc.", cat:"People Analytics" },
+  { t:"Análisis de puestos de trabajo", d:"Proceso sistemático para recopilar, analizar y documentar las responsabilidades, tareas, habilidades, resultados y el entorno de trabajo de un puesto. Sirve de base para la descripción del puesto, valoración salarial y evaluación del desempeño.", cat:"Organización" },
+  { t:"Assessment center", d:"Metodología de evaluación de competencias que combina múltiples ejercicios (role plays, casos de negocio, dinámicas de grupo) observados por varios evaluadores entrenados. Considerada el método más fiable para evaluar potencial y competencias.", cat:"Selección" },
+  { t:"Atracción del talento", d:"Conjunto de estrategias y acciones orientadas a atraer a los mejores candidatos hacia una organización. Incluye employer branding, presencia en redes sociales, cultura de empresa y propuesta de valor al empleado.", cat:"Reclutamiento" },
+  { t:"ATS (Applicant Tracking System)", d:"Software de gestión del proceso de selección que permite publicar vacantes, recibir y filtrar candidaturas, programar entrevistas y gestionar el pipeline de reclutamiento desde una sola plataforma.", cat:"Tecnología HR" },
+  { t:"Auditoría (RRHH)", d:"Revisión sistemática e independiente de las políticas, procedimientos, documentación y cumplimiento legal del área de Recursos Humanos. Permite identificar desviaciones y oportunidades de mejora.", cat:"Cumplimiento" },
+  { t:"Autoevaluación", d:"Proceso por el que el propio empleado evalúa sus competencias, desempeño y resultados. Se usa como complemento de las evaluaciones del desempeño para promover la autoconciencia y el desarrollo personal.", cat:"Evaluación" },
+  // B
+  { t:"Baja laboral", d:"Situación en la que un trabajador queda temporalmente incapacitado para trabajar por enfermedad, accidente o maternidad/paternidad, y recibe una prestación económica sustitutiva del salario a cargo de la Seguridad Social o seguro médico.", cat:"Gestión de Personal" },
+  { t:"Balanced Scorecard", d:"Herramienta de gestión estratégica que traduce la visión y estrategia de la empresa en objetivos e indicadores desde cuatro perspectivas: financiera, clientes, procesos internos y aprendizaje/crecimiento. En RRHH se usa para alinear los objetivos del área con la estrategia corporativa.", cat:"Estrategia" },
+  { t:"Banda salarial", d:"Rango de salarios establecido para un determinado puesto o nivel organizacional, con un mínimo, punto medio y máximo. Permite gestionar la compensación de forma equitativa y competitiva.", cat:"Compensación" },
+  { t:"Benchmarking", d:"Proceso de comparación sistemática de prácticas, procesos y resultados propios con los de otras organizaciones consideradas referentes, con el objetivo de identificar mejores prácticas e implementarlas.", cat:"Estrategia" },
+  { t:"Beneficio Social", d:"Contraprestación no salarial que la empresa ofrece al empleado adicionalmente al salario: seguro médico, tickets restaurante, guardería, plan de pensiones, formación, transporte, etc. Forma parte de la retribución total.", cat:"Compensación" },
+  { t:"Bienestar laboral", d:"Estado en el que el trabajador puede desarrollar su potencial, trabajar de forma productiva y creativa, y contribuir positivamente a la organización. Abarca dimensiones física, mental, social y financiera.", cat:"Bienestar" },
+  { t:"Bonificación (bonus)", d:"Retribución variable adicional al salario fijo, generalmente ligada al cumplimiento de objetivos individuales, de equipo o de la empresa. Puede ser anual, trimestral o puntual por logros específicos.", cat:"Compensación" },
+  { t:"Bradford Factor", d:"Fórmula matemática para cuantificar el impacto del absentismo intermitente en la organización: Bradford = S² × D, donde S es el número de episodios de ausencia y D el total de días ausentes. Ayuda a identificar patrones problemáticos.", cat:"Gestión de Personal" },
+  { t:"Brain Storming", d:"Técnica de generación de ideas en grupo donde se fomenta la cantidad sobre la calidad en una primera fase, sin juicios ni críticas, para luego depurar y priorizar. Útil en procesos de innovación, resolución de problemas y planificación estratégica.", cat:"Metodologías" },
+  { t:"Brecha salarial", d:"Diferencia en la remuneración media entre grupos de trabajadores, habitualmente analizada entre hombres y mujeres (gender pay gap). Puede ser bruta (sin ajustar) o ajustada (controlando por puesto, sector y experiencia).", cat:"Equidad" },
+  { t:"Burnout", d:"Síndrome de agotamiento crónico derivado del estrés laboral sostenido, reconocido por la OMS. Se manifiesta en agotamiento emocional, despersonalización y reducción de la eficacia profesional. La prevención es responsabilidad compartida de la empresa y el individuo.", cat:"Bienestar" },
+  // C
+  { t:"Calibración", d:"Proceso por el que un grupo de directivos o evaluadores revisan y ajustan colectivamente las evaluaciones del desempeño para garantizar que se aplican los mismos estándares en toda la organización y evitar sesgos individuales.", cat:"Evaluación" },
+  { t:"Campana de Gauss", d:"Distribución normal de probabilidad representada gráficamente con forma de campana. En RRHH se usa para modelar el desempeño de los empleados, asumiendo que la mayoría se sitúa en la media y los extremos (alto/bajo desempeño) son minoritarios.", cat:"Analytics" },
+  { t:"Capacitación", d:"Proceso planificado de desarrollo de conocimientos, habilidades y actitudes de los empleados para mejorar su desempeño actual o futuro. Incluye formación presencial, e-learning, on-the-job training y mentoring.", cat:"Desarrollo" },
+  { t:"Capital intelectual", d:"Conjunto de activos intangibles de la organización: conocimiento, habilidades y experiencia de los empleados (capital humano), relaciones con clientes y socios (capital relacional) y procesos, sistemas y cultura (capital estructural).", cat:"Estrategia" },
+  { t:"CEO (Chief Executive Officer)", d:"Director Ejecutivo o máximo responsable ejecutivo de una organización. Reporta al Consejo de Administración y es responsable de la estrategia, la cultura y el desempeño global de la empresa.", cat:"Liderazgo" },
+  { t:"CFO (Chief Financial Officer)", d:"Director Financiero, responsable de la gestión financiera de la organización: contabilidad, tesorería, planificación financiera, riesgos y relaciones con inversores.", cat:"Liderazgo" },
+  { t:"CHO (Chief Happiness Officer)", d:"Responsable del bienestar y felicidad de los empleados en la organización. Diseña e implementa iniciativas de cultura, engagement y experiencia del empleado para mejorar la satisfacción y productividad.", cat:"Bienestar" },
+  { t:"Clima Laboral / Organizacional", d:"Percepción colectiva que tienen los empleados sobre el ambiente de trabajo: comunicación, relaciones, liderazgo, reconocimiento, equidad y condiciones físicas. Es un predictor clave de la productividad, rotación y satisfacción.", cat:"Bienestar" },
+  { t:"Coaching", d:"Proceso de acompañamiento profesional mediante el que un coach ayuda al coachee (empleado o directivo) a desarrollar su potencial, superar obstáculos y alcanzar objetivos mediante preguntas poderosas y reflexión guiada.", cat:"Desarrollo" },
+  { t:"Compensación y beneficios", d:"Área de RRHH responsable del diseño, administración y comunicación de la retribución total: salario fijo, variable, beneficios sociales, retribución flexible y reconocimientos no económicos.", cat:"Compensación" },
+  { t:"Competencia", d:"Conjunto integrado de conocimientos (saber), habilidades (saber hacer) y actitudes (saber ser/estar) que se manifiestan en comportamientos observables y permiten a una persona desempeñar con éxito un puesto o función.", cat:"Desarrollo" },
+  { t:"Competitividad", d:"Capacidad de una organización de alcanzar y mantener una posición ventajosa en el mercado gracias a la diferenciación, la eficiencia o la innovación. En RRHH se relaciona con atraer y retener el talento necesario para esa ventaja.", cat:"Estrategia" },
+  { t:"Comportamiento Organizacional", d:"Disciplina académica y aplicada que estudia cómo los individuos, grupos y estructuras afectan e interactúan dentro de las organizaciones, con el objetivo de mejorar la efectividad organizacional.", cat:"Organización" },
+  { t:"Conciliación laboral", d:"Equilibrio entre la vida profesional y personal del trabajador. Las políticas de conciliación incluyen horario flexible, teletrabajo, reducción de jornada, permisos de paternidad/maternidad ampliados y servicios de apoyo.", cat:"Bienestar" },
+  { t:"Contrato laboral", d:"Acuerdo jurídico entre empleador y trabajador que establece las condiciones de la prestación de servicios: tipo de contrato, duración, salario, jornada, funciones y causas de extinción, sujeto a la legislación laboral vigente.", cat:"Cumplimiento" },
+  { t:"Cultura Corporativa", d:"Conjunto de valores, creencias, normas, comportamientos y formas de hacer compartidas por los miembros de una organización. Es un factor determinante en la atracción de talento, el engagement y el desempeño.", cat:"Organización" },
+  { t:"Culture Add", d:"Concepto opuesto al Culture Fit: buscar candidatos que aporten perspectivas, experiencias y valores complementarios a los de la organización, enriqueciendo la cultura existente en lugar de simplemente encajar en ella.", cat:"Selección" },
+  { t:"Culture Fit", d:"Grado en que los valores, actitudes y comportamientos de un candidato o empleado se alinean con la cultura de la organización. Es un criterio de selección importante, aunque puede generar homogeneidad y sesgos si se aplica en exceso.", cat:"Selección" },
+  { t:"Currículum Vitae", d:"Documento que resume la trayectoria académica, profesional y personal de un candidato. Es el principal instrumento de presentación en los procesos de selección. Puede ser cronológico, funcional o combinado.", cat:"Selección" },
+  // D
+  { t:"Delegar", d:"Proceso por el que un líder transfiere a su equipo la autoridad y responsabilidad para tomar decisiones y ejecutar tareas. La delegación efectiva desarrolla capacidades, libera tiempo directivo y aumenta el compromiso.", cat:"Liderazgo" },
+  { t:"Derecho Laboral", d:"Rama del derecho que regula las relaciones entre empleadores y trabajadores. En México incluye la LFT (Ley Federal del Trabajo), contratos colectivos, IMSS, INFONAVIT y normas de seguridad e higiene.", cat:"Cumplimiento" },
+  { t:"Desarrollo organizacional", d:"Campo de la gestión que se enfoca en mejorar la eficacia y salud de las organizaciones mediante intervenciones planificadas basadas en el conocimiento de las ciencias del comportamiento: cambio cultural, comunicación, liderazgo y estructuras.", cat:"Organización" },
+  { t:"Desempeño", d:"Grado en que un empleado cumple con sus funciones, alcanza sus objetivos y exhibe los comportamientos esperados en su puesto. El desempeño se mide con indicadores cuantitativos (resultados) y cualitativos (competencias).", cat:"Evaluación" },
+  { t:"Despido", d:"Extinción del contrato laboral por decisión unilateral del empleador. Puede ser procedente (justificado por causas objetivas o disciplinarias), improcedente (sin causa o sin seguir el procedimiento correcto) o nulo (por vulneración de derechos fundamentales).", cat:"Gestión de Personal" },
+  { t:"Desvinculación", d:"Proceso de salida de un empleado de la organización, ya sea voluntaria (renuncia) o involuntaria (despido, jubilación, fin de contrato). Una desvinculación bien gestionada incluye offboarding, entrevista de salida y mantenimiento de la relación.", cat:"Gestión de Personal" },
+  { t:"Digitalización", d:"Adopción de tecnologías digitales para transformar los procesos de RRHH: desde la gestión de nómina y el control horario hasta la selección, la formación y el análisis de datos de personas. Permite mayor eficiencia y experiencia del empleado.", cat:"Tecnología HR" },
+  { t:"Distribución normal", d:"Distribución estadística simétrica en forma de campana donde la mayoría de valores se concentran alrededor de la media. Es la base del modelo de evaluación del desempeño por ranking forzado y de muchas técnicas de People Analytics.", cat:"Analytics" },
+  { t:"Diversidad e Inclusión (D&I)", d:"Estrategia organizacional que valora y aprovecha las diferencias entre personas (género, edad, origen, capacidades, orientación, etc.) creando un entorno donde todos pueden contribuir plenamente. Está demostrado que equipos diversos son más innovadores y resilientes.", cat:"Equidad" },
+  { t:"Día hábil", d:"Día en el que se puede realizar una actividad laboral o administrativa, excluyendo fines de semana y festivos oficiales. Relevante para el cómputo de plazos legales, preaviso y cálculo de vacaciones.", cat:"Gestión de Personal" },
+  // E
+  { t:"Efecto Halo", d:"Sesgo cognitivo por el que la percepción positiva o negativa de una característica de una persona influye en la evaluación de todas las demás. Por ejemplo, considerar que un empleado muy simpático también es muy productivo sin evidencia objetiva.", cat:"Evaluación" },
+  { t:"Eficiencia", d:"Capacidad de lograr un objetivo utilizando la menor cantidad de recursos posibles (tiempo, dinero, esfuerzo). En RRHH se mide en términos de productividad por empleado, coste por contratación, tiempo de incorporación, etc.", cat:"Organización" },
+  { t:"Employee Advocacy", d:"Estrategia por la que los propios empleados actúan como embajadores de la marca empleadora, compartiendo contenidos positivos sobre la empresa en sus redes sociales y entornos personales de forma auténtica y voluntaria.", cat:"Employer Branding" },
+  { t:"Employee Experience (EX)", d:"Suma de todas las interacciones, percepciones y sentimientos que un empleado experimenta durante su ciclo de vida en la organización: desde la selección hasta la desvinculación. Incluye el entorno físico, digital y cultural.", cat:"Experiencia del Empleado" },
+  { t:"Employee Journey", d:"Mapa de todos los momentos y etapas que vive un empleado en su relación con la organización: atracción, selección, incorporación, desarrollo, reconocimiento y salida. Permite identificar y mejorar los momentos que más impactan en la experiencia.", cat:"Experiencia del Empleado" },
+  { t:"Employee Value Proposition (EVP)", d:"Conjunto de atributos y beneficios únicos que la organización ofrece a cambio de las habilidades, capacidades y experiencias que el empleado aporta. Es la base de la marca empleadora.", cat:"Employer Branding" },
+  { t:"Employer Branding", d:"Estrategia de gestión de la reputación de la organización como empleador. Busca atraer y retener talento proyectando una imagen auténtica y atractiva de la empresa como lugar donde trabajar.", cat:"Employer Branding" },
+  { t:"Empowerment", d:"Proceso por el que se otorga a los empleados mayor autonomía, responsabilidad y control sobre su trabajo y decisiones. Aumenta la motivación, la creatividad y el compromiso.", cat:"Liderazgo" },
+  { t:"Encuesta de Onboarding", d:"Cuestionario aplicado a los nuevos empleados durante o al finalizar su proceso de incorporación para evaluar la calidad de la acogida, la formación recibida y el nivel de integración en el equipo.", cat:"Experiencia del Empleado" },
+  { t:"Encuesta de salida", d:"Cuestionario o entrevista realizada al empleado que abandona la organización para conocer los motivos de su salida y recopilar información valiosa para mejorar la retención y la experiencia del empleado.", cat:"Experiencia del Empleado" },
+  { t:"Engagement", d:"Grado de compromiso emocional y racional del empleado con la organización, su trabajo y sus objetivos. Un alto engagement se asocia con mayor productividad, menor absentismo y menor rotación. Se mide mediante encuestas específicas.", cat:"Bienestar" },
+  { t:"eNPS (Employee Net Promoter Score)", d:"Métrica de engagement que pregunta a los empleados: ¿Con qué probabilidad recomendarías esta empresa como lugar para trabajar? El resultado va de -100 a +100. Se calcula restando el % de detractores al % de promotores.", cat:"Métricas" },
+  { t:"Entrevista de selección", d:"Conversación estructurada entre el seleccionador y el candidato para evaluar sus competencias, experiencia, motivación y ajuste cultural al puesto. Puede ser individual, grupal, por competencias, situacional o técnica.", cat:"Selección" },
+  { t:"Equidad Salarial", d:"Principio por el que los empleados que realizan trabajos de igual valor reciben una remuneración equivalente, independientemente de su género, origen u otras características personales. Es una obligación legal en muchos países.", cat:"Compensación" },
+  { t:"Escala de Likert", d:"Escala de medición psicométrica ampliamente usada en encuestas de clima, engagement y evaluación, donde el encuestado indica su grado de acuerdo o desacuerdo con una afirmación en una escala típicamente de 5 o 7 puntos.", cat:"Analytics" },
+  { t:"Estrés laboral", d:"Respuesta fisiológica y psicológica a exigencias laborales que superan los recursos o capacidades del trabajador. El estrés crónico no gestionado deriva en burnout, ausentismo y problemas de salud.", cat:"Bienestar" },
+  { t:"Evaluación 360°", d:"Metodología de evaluación del desempeño en la que el empleado es valorado por múltiples fuentes: su jefe, compañeros, colaboradores directos, clientes internos y él mismo. Ofrece una visión completa y reduce sesgos individuales.", cat:"Evaluación" },
+  { t:"Evaluación 180°", d:"Variante de la evaluación 360° donde el empleado es valorado por su jefe directo y por sí mismo (autoevaluación), sin incluir la visión de compañeros ni colaboradores. Común en organizaciones con estructuras más verticales.", cat:"Evaluación" },
+  { t:"Evaluación del Desempeño", d:"Proceso periódico y sistemático de valoración del rendimiento, competencias y logros de un empleado en relación con los objetivos y expectativas de su puesto. Es la base del desarrollo, la compensación variable y la planificación de la sucesión.", cat:"Evaluación" },
+  // F
+  { t:"Feedback", d:"Información de retorno que se proporciona a una persona sobre su comportamiento, desempeño o resultados, con el objetivo de que pueda mantener fortalezas o corregir áreas de mejora. Es el motor del aprendizaje y el desarrollo profesional.", cat:"Desarrollo" },
+  { t:"Feedback negativo o correctivo", d:"Retroalimentación que señala comportamientos o resultados que deben cambiar. Para ser efectivo debe ser específico, oportuno, orientado al comportamiento (no a la persona) y acompañado de alternativas de mejora.", cat:"Desarrollo" },
+  { t:"Feedback positivo", d:"Retroalimentación que refuerza comportamientos y resultados positivos, indicando qué se está haciendo bien y por qué tiene impacto. Es fundamental para la motivación, el reconocimiento y el aprendizaje.", cat:"Desarrollo" },
+  { t:"Feedforward", d:"Complemento del feedback centrado en el futuro: en lugar de analizar lo que salió mal en el pasado, propone comportamientos y acciones concretas para mejorar el desempeño futuro. Desarrollado por Marshall Goldsmith.", cat:"Desarrollo" },
+  { t:"Fidelización del talento", d:"Conjunto de estrategias orientadas a mantener a los empleados clave en la organización a largo plazo: planes de carrera, compensación competitiva, desarrollo, reconocimiento, conciliación y cultura positiva.", cat:"Retención" },
+  { t:"Finiquito", d:"Documento legal que acredita el pago de todas las cantidades adeudadas al trabajador al finalizar la relación laboral: salarios pendientes, vacaciones no disfrutadas, partes proporcionales de pagas extra y otras percepciones.", cat:"Cumplimiento" },
+  { t:"Freelance", d:"Trabajador autónomo o independiente que presta servicios a múltiples clientes sin una relación laboral de dependencia fija. En RRHH es relevante para la gestión de la fuerza de trabajo mixta (employees + contingente).", cat:"Gestión de Personal" },
+  { t:"Full Time Equivalent (FTE)", d:"Unidad de medida que representa la carga de trabajo de un empleado a jornada completa. Permite comparar plantillas con diferentes tipos de jornada: un empleado a medio tiempo equivale a 0,5 FTE.", cat:"Métricas" },
+  // G
+  { t:"GAP (análisis de brechas)", d:"Diferencia entre la situación actual y la situación deseada en cualquier ámbito de RRHH: competencias, headcount, cultura, procesos. El análisis de GAP permite priorizar acciones de mejora.", cat:"Estrategia" },
+  { t:"Gestión del talento", d:"Conjunto integrado de procesos de RRHH orientados a atraer, identificar, desarrollar, motivar y retener a los empleados con mayor potencial y desempeño para satisfacer las necesidades actuales y futuras de la organización.", cat:"Desarrollo" },
+  { t:"Gestión por competencias", d:"Enfoque de gestión de personas que define los perfiles de puesto, selecciona, forma y evalúa a los empleados en función de competencias (conocimientos, habilidades y actitudes) clave para el éxito organizacional.", cat:"Desarrollo" },
+  // H
+  { t:"Hard Skills", d:"Habilidades técnicas y conocimientos específicos medibles y enseñables que se requieren para desempeñar un puesto: programación, contabilidad, idiomas, manejo de maquinaria, etc. Se adquieren mediante formación formal o experiencia.", cat:"Desarrollo" },
+  { t:"HCM (Human Capital Management)", d:"Conjunto de prácticas y tecnologías para gestionar el ciclo de vida completo del empleado como un activo estratégico: reclutamiento, incorporación, desempeño, formación, compensación y sucesión.", cat:"Tecnología HR" },
+  { t:"Headhunting", d:"Proceso de búsqueda activa y directa de candidatos para puestos directivos o altamente especializados, generalmente personas que no están buscando empleo activamente. Lo realizan consultoras especializadas o recruiters internos senior.", cat:"Selección" },
+  { t:"High Performance", d:"Nivel de desempeño significativamente superior al estándar, caracterizado por resultados consistentemente excepcionales, iniciativa, impacto y alineación con los valores de la organización. Empleados high performance suelen ser candidatos prioritarios para planes de sucesión.", cat:"Evaluación" },
+  { t:"Horario laboral", d:"Distribución de la jornada de trabajo en horas, días y turnos. Puede ser fijo, flexible, rotativo o de libre disposición. El registro horario es obligatorio legalmente en muchos países.", cat:"Gestión de Personal" },
+  { t:"HR Analytics", d:"Aplicación de métodos analíticos a los datos de personas para generar insights que mejoren la toma de decisiones de RRHH: desde descriptivo (¿qué pasó?) hasta predictivo (¿qué pasará?) y prescriptivo (¿qué deberíamos hacer?).", cat:"People Analytics" },
+  { t:"HR Business Partner (HRBP)", d:"Profesional de RRHH que actúa como socio estratégico de las unidades de negocio, alineando las prácticas de personas con los objetivos de cada área. Requiere conocimiento profundo del negocio además de expertise en RRHH.", cat:"Organización" },
+  { t:"HRIS (Human Resources Information System)", d:"Sistema de información que centraliza la gestión de datos de RRHH: expedientes de empleados, nómina, control horario, formación, evaluación, etc. Es la columna vertebral de la digitalización del área.", cat:"Tecnología HR" },
+  // I
+  { t:"IA (Inteligencia Artificial) en RRHH", d:"Uso de algoritmos de machine learning, procesamiento de lenguaje natural y otros métodos de IA para automatizar y optimizar procesos de RRHH: cribado de candidatos, chatbots de onboarding, análisis predictivo de rotación, etc.", cat:"Tecnología HR" },
+  { t:"Incentivo", d:"Estímulo (económico o no) diseñado para motivar comportamientos o resultados específicos. Los incentivos económicos incluyen bonos y comisiones; los no económicos incluyen reconocimiento, flexibilidad, desarrollo y autonomía.", cat:"Compensación" },
+  { t:"Inclusión", d:"Creación de un entorno en el que todos los empleados, independientemente de sus características personales, se sientan valorados, respetados y capaces de contribuir plenamente. La diversidad sin inclusión no genera los beneficios esperados.", cat:"Equidad" },
+  { t:"Indicador de desempeño (KPI)", d:"Métrica cuantificable que permite medir el progreso hacia un objetivo estratégico u operativo. En RRHH incluye métricas como tasa de rotación, time-to-hire, coste por contratación, absentismo, engagement y productividad.", cat:"Métricas" },
+  { t:"Inteligencia emocional", d:"Capacidad de reconocer, comprender y gestionar las propias emociones y las de los demás. El modelo de Goleman la descompone en autoconciencia, autogestión, conciencia social y gestión de relaciones. Es una competencia clave del liderazgo.", cat:"Liderazgo" },
+  { t:"Internal Mobility", d:"Movimiento de empleados entre distintos puestos, equipos, funciones o geografías dentro de la misma organización. Mejora la retención, la satisfacción y el aprovechamiento del talento interno.", cat:"Desarrollo" },
+  { t:"Intraemprendimiento", d:"Comportamiento emprendedor de un empleado dentro de su organización: genera nuevas ideas, proyectos o modelos de negocio asumiendo riesgos calculados. Las organizaciones que lo fomentan tienen mayor capacidad de innovación.", cat:"Desarrollo" },
+  // J
+  { t:"Job Crafting", d:"Proceso por el que el empleado rediseña activamente su propio trabajo, ajustando tareas, relaciones o significado para que se alinee mejor con sus fortalezas, intereses y valores. Aumenta el engagement y la satisfacción.", cat:"Bienestar" },
+  { t:"Jubilación", d:"Finalización de la vida laboral activa de un trabajador al alcanzar la edad legal establecida, accediendo a una pensión de la Seguridad Social. La gestión de la jubilación incluye planificación de la sucesión y planes de pensiones de empresa.", cat:"Gestión de Personal" },
+  { t:"Junior", d:"Descriptor del nivel de experiencia de un profesional en sus primeros años de carrera (generalmente 0-3 años). Se distingue de Senior (alta experiencia) y Middle (nivel intermedio). Determina el perfil, responsabilidades y rango salarial del puesto.", cat:"Organización" },
+  // K
+  { t:"Know-How", d:"Conocimiento práctico y experiencia acumulada que permite realizar una tarea o proceso de forma eficiente. Es un activo intangible clave que las organizaciones deben identificar, documentar y proteger.", cat:"Desarrollo" },
+  { t:"KPI (Key Performance Indicator)", d:"Indicador clave de desempeño que mide el progreso hacia un objetivo estratégico. Debe ser SMART (Específico, Medible, Alcanzable, Relevante y con Tiempo definido). En RRHH: tiempo de contratación, rotación, eNPS, absentismo, etc.", cat:"Métricas" },
+  // L
+  { t:"Learning Agility", d:"Capacidad de una persona de aprender con rapidez de las experiencias, adaptarse a situaciones nuevas y aplicar ese aprendizaje con éxito en contextos distintos. Es considerado uno de los mejores predictores del potencial de liderazgo.", cat:"Desarrollo" },
+  { t:"Liderazgo", d:"Capacidad de influir y guiar a otras personas hacia el logro de objetivos comunes. Los estilos de liderazgo (transformacional, situacional, servant, etc.) tienen distinto impacto en el engagement, la innovación y el desempeño del equipo.", cat:"Liderazgo" },
+  { t:"Liderazgo Transformacional", d:"Estilo de liderazgo en el que el líder motiva a sus seguidores a superar sus intereses personales para alcanzar el bien colectivo, inspirando una visión compartida, estimulando intelectualmente y reconociendo individualmente.", cat:"Liderazgo" },
+  // M
+  { t:"Manual de Acogida", d:"Documento o guía que recibe el nuevo empleado al incorporarse, con información sobre la empresa, su cultura, normas, beneficios, estructura organizativa, herramientas y protocolos. Facilita la integración y reduce el tiempo de adaptación.", cat:"Onboarding" },
+  { t:"Marca Personal", d:"Imagen y reputación profesional que una persona construye y comunica en el mercado laboral. En el contexto corporativo, los empleados con fuerte marca personal contribuyen al employer branding de la organización.", cat:"Employer Branding" },
+  { t:"Matriz de talento", d:"Herramienta visual (generalmente una cuadrícula) que clasifica a los empleados según dos dimensiones: desempeño actual y potencial futuro. La más conocida es el Nine Box Grid, usada para planificación de la sucesión y desarrollo diferenciado.", cat:"Evaluación" },
+  { t:"Mentoring", d:"Relación de desarrollo profesional en la que una persona con más experiencia (mentor) guía, aconseja y acompaña a otra con menos experiencia (mentee) en su crecimiento personal y profesional.", cat:"Desarrollo" },
+  { t:"Microlearning", d:"Modalidad de formación basada en contenidos cortos (2-10 minutos), específicos y fácilmente accesibles, diseñados para ser consumidos en el momento de necesidad. Alta efectividad en entornos digitales y móviles.", cat:"Desarrollo" },
+  { t:"Misión", d:"Declaración que define la razón de ser de la organización: qué hace, para quién lo hace y cómo lo hace. Junto con la visión y los valores, forma la base de la identidad corporativa y orienta las decisiones estratégicas.", cat:"Estrategia" },
+  { t:"Mobbing", d:"Acoso psicológico en el trabajo, consistente en comportamientos hostiles, humillantes o intimidatorios repetidos hacia un trabajador por parte de compañeros o superiores. Es ilegal en la mayoría de países y genera graves consecuencias para la salud.", cat:"Bienestar" },
+  { t:"Motivación empresarial", d:"Conjunto de factores internos y externos que impulsan a una persona a actuar con esfuerzo hacia los objetivos organizacionales. Las teorías de Maslow, Herzberg y Deci & Ryan son referentes para el diseño de sistemas de motivación.", cat:"Bienestar" },
+  { t:"Multitasking", d:"Capacidad de realizar múltiples tareas simultáneamente o de alternar entre ellas con rapidez. La investigación muestra que el multitasking reduce la calidad del trabajo y el foco cognitivo; el monotasking suele ser más efectivo.", cat:"Productividad" },
+  { t:"Método SBI (Situation-Behavior-Impact)", d:"Modelo estructurado de feedback que describe la Situación específica, el Comportamiento observado y el Impacto que tuvo, evitando juicios y generalizaciones. Hace el feedback objetivo y accionable.", cat:"Desarrollo" },
+  // N
+  { t:"Necesidades formativas", d:"Brechas entre las competencias actuales de los empleados y las que se requieren para el desempeño óptimo del puesto o para el desarrollo futuro. La detección de necesidades formativas (DNF) es el primer paso del ciclo de formación.", cat:"Desarrollo" },
+  { t:"Nine Box Grid", d:"Matriz 3×3 que clasifica a los empleados combinando dos ejes: desempeño actual (bajo/medio/alto) y potencial futuro (bajo/medio/alto). Herramienta central en los procesos de calibración de talento y planes de sucesión.", cat:"Evaluación" },
+  { t:"Norma Oficial Mexicana 035 (NOM-035)", d:"Norma mexicana que establece los elementos para identificar, analizar y prevenir los factores de riesgo psicosocial en el trabajo, así como para promover un entorno organizacional favorable. Aplica a todos los centros de trabajo en México.", cat:"Cumplimiento" },
+  { t:"NPS (Net Promoter Score)", d:"Métrica que mide la lealtad de clientes o empleados preguntando su probabilidad de recomendación en una escala de 0 a 10. Los promotores (9-10) menos los detractores (0-6) dan el NPS. Aplicado a empleados se denomina eNPS.", cat:"Métricas" },
+  { t:"Nómina", d:"Documento o registro que detalla los conceptos salariales y deducciones de cada empleado en un período determinado: salario bruto, percepciones, deducciones (IMSS, ISR, INFONAVIT en México) y salario neto a pagar.", cat:"Compensación" },
+  // O
+  { t:"Objetivo SMART", d:"Marco para definir objetivos que sean Específicos (Specific), Medibles (Measurable), Alcanzables (Achievable), Relevantes (Relevant) y con un Tiempo definido (Time-bound). Es el estándar en gestión del desempeño por objetivos.", cat:"Evaluación" },
+  { t:"Offboarding", d:"Proceso de salida del empleado de la organización que incluye: entrevista de salida, traspaso de conocimiento, desactivación de accesos, liquidación de haberes y mantenimiento de la relación como alumni. Un buen offboarding cuida la marca empleadora.", cat:"Gestión de Personal" },
+  { t:"OKR (Objectives & Key Results)", d:"Marco de gestión de objetivos popularizado por Google: se fija un Objetivo ambicioso (O) y 3-5 Resultados Clave (KR) medibles que indican si el objetivo se ha alcanzado. Se revisan con frecuencia (trimestralmente) y favorecen la alineación y transparencia.", cat:"Evaluación" },
+  { t:"Onboarding", d:"Proceso de incorporación y adaptación del nuevo empleado a la organización: desde la firma del contrato hasta que alcanza plena productividad. Incluye bienvenida, formación, integración en el equipo y conocimiento de la cultura. Un buen onboarding reduce la rotación temprana.", cat:"Onboarding" },
+  { t:"One on One", d:"Reunión periódica (semanal, quincenal o mensual) entre el manager y cada uno de sus colaboradores directos. Es el espacio dedicado al seguimiento de objetivos, desarrollo, feedback y fortalecimiento de la relación.", cat:"Liderazgo" },
+  { t:"Organigrama", d:"Representación gráfica de la estructura formal de una organización: jerarquías, departamentos, líneas de reporte y relaciones entre puestos. Facilita la comprensión de la estructura, la comunicación y la planificación de la plantilla.", cat:"Organización" },
+  { t:"Outplacement", d:"Servicio de recolocación laboral que la empresa contrata para apoyar a los empleados desvinculados en su proceso de reincorporación al mercado laboral: actualización del CV, entrenamiento en entrevistas, red de contactos y orientación profesional.", cat:"Gestión de Personal" },
+  { t:"Outsourcing", d:"Contratación externa de procesos o servicios que la organización decide no gestionar internamente: nómina, selección, formación, IT, etc. Permite focalizarse en el core business y acceder a expertise especializado.", cat:"Organización" },
+  // P
+  { t:"People Analytics", d:"Disciplina que aplica técnicas de análisis de datos a la gestión de personas para tomar decisiones más informadas sobre contratación, formación, engagement, retención y planificación de la fuerza de trabajo.", cat:"People Analytics" },
+  { t:"Perfil competencial", d:"Descripción del conjunto de competencias (conocimientos, habilidades y actitudes) que un empleado debe tener para desempeñar con éxito un puesto. Es la base para la selección, la formación y la evaluación.", cat:"Desarrollo" },
+  { t:"Performance Review", d:"Revisión formal del desempeño de un empleado, generalmente semestral o anual. Incluye la valoración de resultados frente a objetivos, competencias, logros y áreas de desarrollo, y es la base para decisiones de compensación y carrera.", cat:"Evaluación" },
+  { t:"Plan de carrera", d:"Trayectoria de desarrollo profesional planificada para un empleado dentro de la organización, con etapas, hitos y los recursos formativos necesarios para progresar. Alinea las aspiraciones del empleado con las necesidades organizativas.", cat:"Desarrollo" },
+  { t:"Plan de desarrollo individual (PDI)", d:"Plan personalizado que define los objetivos de desarrollo de un empleado, las acciones concretas para alcanzarlos (formaciones, proyectos, mentoring) y los plazos. Es el output principal de una conversación de desarrollo.", cat:"Desarrollo" },
+  { t:"Plan de sucesión", d:"Proceso de identificación y desarrollo de candidatos internos para ocupar posiciones clave en caso de vacante. Garantiza la continuidad del negocio y reduce la dependencia de contrataciones externas urgentes.", cat:"Desarrollo" },
+  { t:"Productividad", d:"Relación entre los resultados obtenidos y los recursos utilizados (tiempo, personas, capital). En RRHH se mide como producción por empleado o por hora trabajada. Su mejora puede venir de la formación, la tecnología o el diseño del trabajo.", cat:"Métricas" },
+  { t:"Promoción interna", d:"Ascenso de un empleado a un puesto de mayor responsabilidad o categoría dentro de la organización. Favorece la motivación, la retención y el aprovechamiento del conocimiento interno.", cat:"Desarrollo" },
+  { t:"Propuesta de Valor al Empleado (PVE/EVP)", d:"Conjunto de beneficios (salariales, emocionales, de desarrollo, conciliación y pertenencia) que la organización ofrece a sus empleados a cambio de su contribución. Define qué hace única a la empresa como empleador.", cat:"Employer Branding" },
+  { t:"Psicología Laboral", d:"Rama de la psicología que estudia el comportamiento humano en el contexto del trabajo: motivación, liderazgo, satisfacción, bienestar, ergonomía, selección de personal, formación y desarrollo organizacional.", cat:"Bienestar" },
+  // Q
+  { t:"Quiet Hiring", d:"Práctica por la que las organizaciones cubren nuevas necesidades reasignando empleados internos o contratando talento externo temporal (freelancers, contratistas), en lugar de realizar nuevas contrataciones permanentes.", cat:"Reclutamiento" },
+  { t:"Quiet Quitting", d:"Fenómeno por el que el empleado limita su esfuerzo estrictamente a lo definido en su contrato, sin comprometerse con tareas adicionales ni mostrar iniciativa. No es una renuncia formal, sino una desconexión emocional del trabajo.", cat:"Bienestar" },
+  // R
+  { t:"Reclutamiento", d:"Proceso de identificación, atracción y captación de candidatos calificados para cubrir una vacante. Puede ser interno (entre empleados actuales), externo (del mercado laboral) o mixto.", cat:"Selección" },
+  { t:"Reskilling", d:"Proceso de recapacitación de empleados para que puedan desempeñar funciones completamente distintas a las actuales, generalmente motivado por cambios tecnológicos, organizativos o de mercado.", cat:"Desarrollo" },
+  { t:"Retención del talento", d:"Conjunto de estrategias y prácticas orientadas a que los empleados clave permanezcan en la organización: compensación competitiva, desarrollo de carrera, cultura positiva, reconocimiento, autonomía y conciliación.", cat:"Retención" },
+  { t:"Rotación de personal", d:"Tasa que mide el porcentaje de empleados que abandonan la organización en un período determinado, ya sea voluntaria (renuncias) o involuntariamente (despidos). Una alta rotación impacta costes, productividad y cultura.", cat:"Métricas" },
+  { t:"ROI (Return On Investment)", d:"Indicador que mide el retorno económico de una inversión en relación a su coste. En RRHH se aplica a programas de formación, reclutamiento y bienestar para justificar el valor de las inversiones en personas.", cat:"Métricas" },
+  { t:"RSC (Responsabilidad Social Corporativa)", d:"Compromiso voluntario de la empresa con el desarrollo sostenible, el bienestar de sus empleados, la comunidad y el medio ambiente, más allá de sus obligaciones legales. Impacta en la atracción de talento y la reputación.", cat:"Estrategia" },
+  // S
+  { t:"Salario bruto", d:"Retribución total que percibe el empleado antes de aplicar las deducciones legales (impuestos, cotizaciones a la Seguridad Social). Es la base para calcular el salario neto.", cat:"Compensación" },
+  { t:"Salario emocional", d:"Conjunto de beneficios no económicos que impactan positivamente en la satisfacción y bienestar del empleado: reconocimiento, flexibilidad, desarrollo, ambiente de trabajo, propósito y autonomía.", cat:"Compensación" },
+  { t:"Salario neto", d:"Cantidad que el empleado recibe efectivamente en su cuenta bancaria, después de descontar los impuestos (ISR en México) y las cotizaciones a la Seguridad Social (IMSS, INFONAVIT).", cat:"Compensación" },
+  { t:"Satisfacción Laboral", d:"Grado en que el empleado experimenta emociones positivas respecto a su trabajo: relaciones, tareas, condiciones, compensación, liderazgo y desarrollo. Es un predictor del absentismo, la rotación y la productividad.", cat:"Bienestar" },
+  { t:"Seguridad Psicológica", d:"Concepto desarrollado por Amy Edmondson que describe el clima de equipo en el que las personas se sienten seguras para expresar ideas, hacer preguntas, admitir errores y tomar riesgos sin miedo a represalias. Es el factor número 1 de los equipos de alto desempeño según Google (Proyecto Aristotle).", cat:"Bienestar" },
+  { t:"Selección de personal", d:"Proceso de evaluación y elección del candidato más adecuado para un puesto entre los aspirantes reclutados. Incluye revisión de CV, entrevistas, pruebas técnicas, assessment y verificación de referencias.", cat:"Selección" },
+  { t:"Sesgo Cognitivo", d:"Error sistemático del pensamiento que afecta la objetividad de los juicios y decisiones. En RRHH los sesgos más relevantes son el efecto halo, el sesgo de similitud, el de confirmación y el de tendencia central, presentes en selección y evaluación.", cat:"Evaluación" },
+  { t:"Sesgo de Confirmación", d:"Tendencia a buscar, interpretar y recordar información que confirma las creencias previas. En entrevistas puede llevar a tomar decisiones basadas en la primera impresión del candidato e ignorar evidencia contradictoria.", cat:"Evaluación" },
+  { t:"Sesgo de Género", d:"Prejuicio, consciente o inconsciente, que favorece o perjudica a personas por su género. En RRHH se manifiesta en selección, evaluación del desempeño, brecha salarial y promoción, y es un foco prioritario de las políticas de D&I.", cat:"Equidad" },
+  { t:"Soft Skills", d:"Habilidades socioemocionales e interpersonales que determinan cómo una persona trabaja e interactúa: comunicación, trabajo en equipo, adaptabilidad, resolución de problemas, empatía y gestión del tiempo. Complementan a las hard skills.", cat:"Desarrollo" },
+  { t:"STAR (Método)", d:"Técnica de entrevista por competencias que estructura las respuestas del candidato en cuatro elementos: Situación, Tarea, Acción realizada y Resultado obtenido. Permite evaluar competencias con evidencia conductual real.", cat:"Selección" },
+  // T
+  { t:"Talento", d:"Combinación única de capacidades, conocimientos, habilidades y motivación de una persona que le permite alcanzar resultados superiores al promedio de forma consistente. La gestión del talento es la función estratégica central de RRHH.", cat:"Desarrollo" },
+  { t:"Tasa de Rotación", d:"Porcentaje de empleados que abandonan la organización en un período: (Nº bajas / Plantilla media) × 100. Permite comparar la estabilidad de la plantilla entre períodos, departamentos y empresas del sector.", cat:"Métricas" },
+  { t:"Techo de cristal", d:"Barrera invisible que impide a personas de ciertos grupos (especialmente mujeres) ascender a posiciones directivas o de alta responsabilidad, a pesar de tener las capacidades necesarias. Su eliminación es un objetivo clave de las políticas de D&I.", cat:"Equidad" },
+  { t:"Teletrabajo", d:"Modalidad de trabajo en la que el empleado realiza sus funciones a distancia, generalmente desde su domicilio, utilizando tecnologías de la información y comunicación. Puede ser total o híbrido (combinado con presencia en oficina).", cat:"Gestión de Personal" },
+  { t:"Transformación Digital", d:"Proceso de integración de la tecnología digital en todas las áreas de una organización, cambiando fundamentalmente cómo opera y crea valor. En RRHH implica digitalizar procesos de selección, formación, evaluación y gestión de personas.", cat:"Tecnología HR" },
+  // U
+  { t:"Upskilling", d:"Proceso de mejora y actualización de las competencias actuales de un empleado para que pueda desempeñar mejor su puesto actual o adaptarse a la evolución tecnológica o del negocio. Se distingue del reskilling en que no implica un cambio de rol.", cat:"Desarrollo" },
+  // V
+  { t:"Vacante", d:"Puesto de trabajo que está disponible para ser cubierto en una organización. La gestión de vacantes incluye la detección de la necesidad, la autorización, la definición del perfil, el reclutamiento, la selección y la incorporación.", cat:"Selección" },
+  { t:"Valores", d:"Principios y creencias fundamentales que guían el comportamiento y las decisiones de una organización y sus miembros. Son el núcleo de la cultura corporativa y deben ser vividos por el liderazgo para tener credibilidad.", cat:"Estrategia" },
+  { t:"Ventana de Johari", d:"Modelo de autoconocimiento e interpersonal desarrollado por Joseph Luft y Harry Ingham que describe cuatro cuadrantes según lo que uno mismo conoce y lo que conocen los demás: arena (conocido por todos), punto ciego (otros lo ven, yo no), fachada (yo lo sé, otros no) e incógnita.", cat:"Desarrollo" },
+  { t:"Visión", d:"Declaración que describe el estado futuro deseado de la organización a largo plazo: hacia dónde quiere ir y qué quiere llegar a ser. Junto con la misión y los valores, orienta la estrategia y motiva a los equipos.", cat:"Estrategia" },
+  { t:"VUCA", d:"Acrónimo que describe el entorno empresarial actual: Volátil, Incierto (Uncertain), Complejo y Ambiguo. Las organizaciones VUCA-ready desarrollan liderazgo adaptativo, toman decisiones ágiles y construyen organizaciones resilientes.", cat:"Estrategia" },
+  // W
+  { t:"Wellbeing (Bienestar integral)", d:"Enfoque holístico del bienestar de los empleados que integra las dimensiones física, mental, financiera y social. Las organizaciones con sólidos programas de wellbeing tienen mayor engagement, menor absentismo y mejor retención.", cat:"Bienestar" },
+  { t:"Work Life Balance", d:"Equilibrio entre las demandas del trabajo y de la vida personal. Las políticas de conciliación (teletrabajo, flexibilidad horaria, permisos, servicios de apoyo) son la principal herramienta para fomentarlo.", cat:"Bienestar" },
+  // X
+  { t:"Generación X", d:"Cohorte generacional nacida entre 1965 y 1980. Se caracteriza por la autonomía, la adaptabilidad y el pragmatismo. En el entorno laboral actual ocupa muchas posiciones de liderazgo intermedio y directivo.", cat:"Diversidad" },
+  // Y
+  { t:"Generación Y (Millennials)", d:"Cohorte nacida entre 1981 y 1996. Valoran el propósito, el desarrollo profesional, la flexibilidad y el feedback continuo. Son la generación más numerosa en el mercado laboral actual.", cat:"Diversidad" },
+  // Z
+  { t:"Generación Z", d:"Cohorte nacida desde 1997. Son nativos digitales, valoran la autenticidad, la diversidad, la salud mental y el impacto social. Están incorporándose al mercado laboral con expectativas muy diferentes a generaciones anteriores.", cat:"Diversidad" },
+  { t:"Teoría Z", d:"Modelo de gestión desarrollado por William Ouchi que combina principios de la empresa japonesa (empleo vitalicio, decisión por consenso, carrera no especializada) con la organización occidental. Prioriza la confianza, la sutileza y la cohesión del equipo.", cat:"Estrategia" },
+];
+
+const DICT_CATEGORIES = [...new Set(DICT_DATA.map(e => e.cat))].sort();
+const DICT_LETTERS = [...new Set(DICT_DATA.map(e => e.t[0].toUpperCase()))].sort();
+
+const DiccionarioRRHH = () => {
+    const [search, setSearch] = React.useState('');
+    const [activeLetter, setActiveLetter] = React.useState(null);
+    const [activecat, setActivecat] = React.useState(null);
+    const [expanded, setExpanded] = React.useState(null);
+
+    const filtered = React.useMemo(() => {
+        let list = DICT_DATA;
+        if (activeLetter) list = list.filter(e => e.t[0].toUpperCase() === activeLetter);
+        if (activecat)   list = list.filter(e => e.cat === activecat);
+        if (search.trim()) {
+            const q = search.toLowerCase().trim();
+            list = list.filter(e => e.t.toLowerCase().includes(q) || e.d.toLowerCase().includes(q));
+        }
+        return list;
+    }, [search, activeLetter, activecat]);
+
+    const byLetter = React.useMemo(() => {
+        const map = {};
+        filtered.forEach(e => {
+            const l = e.t[0].toUpperCase();
+            if (!map[l]) map[l] = [];
+            map[l].push(e);
+        });
+        return map;
+    }, [filtered]);
+
+    const clearFilters = () => { setActiveLetter(null); setActivecat(null); setSearch(''); setExpanded(null); };
+
+    const catColors = {
+        "Compensación": DS.glowAmber, "Desarrollo": DS.glow, "Evaluación": DS.glowPurple,
+        "Selección": DS.glowGreen, "Bienestar": "#e05c5c", "Métricas": "#5ca8e0",
+        "Estrategia": "#e0aa5c", "Liderazgo": DS.glow, "People Analytics": "#5ce0c8",
+        "Tecnología HR": "#a05ce0", "Equidad": "#e05cb8", "Organización": "#5c78e0",
+        "Gestión de Personal": DS.glowAmber, "Cumplimiento": "#7eb85c", "Onboarding": DS.glowGreen,
+        "Employer Branding": "#e0875c", "Reclutamiento": DS.glowGreen, "Retención": "#e05c5c",
+        "Productividad": DS.glow, "Diversidad": "#c05ce0", "Metodologías": "#5c9ee0",
+        "Seguridad y Salud": "#5ca85c",
+    };
+    const getCatColor = cat => catColors[cat] || DS.glow;
+
+    return React.createElement("div", { style: { fontFamily: DS.sans } },
+        // Header
+        React.createElement("div", { style: { marginBottom: 24 } },
+            React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 12, marginBottom: 8 } },
+                React.createElement("div", { style: { width: 40, height: 40, borderRadius: 10, background: `${DS.glow}18`, display: "flex", alignItems: "center", justifyContent: "center" } },
+                    React.createElement(BookOpen, { size: 20, color: DS.glow })),
+                React.createElement("div", null,
+                    React.createElement("div", { style: { fontSize: 18, fontWeight: 800, color: DS.text } }, "Diccionario de Recursos Humanos"),
+                    React.createElement("div", { style: { fontSize: 12, color: DS.textDim, marginTop: 2 } },
+                        DICT_DATA.length + " términos profesionales con definiciones · Filtra por letra, categoría o búsqueda")
+                )
+            )
+        ),
+
+        // Search bar + active filters
+        React.createElement("div", { style: { display: "flex", gap: 10, marginBottom: 16, alignItems: "center", flexWrap: "wrap" } },
+            React.createElement("div", { style: { position: "relative", flex: "1 1 260px", minWidth: 200 } },
+                React.createElement(Search, { size: 14, color: DS.textDim, style: { position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" } }),
+                React.createElement("input", {
+                    value: search,
+                    onChange: e => { setSearch(e.target.value); setActiveLetter(null); setActivecat(null); },
+                    placeholder: "Buscar término o definición...",
+                    style: { width: "100%", paddingLeft: 36, paddingRight: 12, height: 38, background: DS.surface, border: `1px solid ${DS.border}`, borderRadius: 8, color: DS.text, fontSize: 13, outline: "none", boxSizing: "border-box" }
+                })
+            ),
+            (activeLetter || activecat || search) && React.createElement("button", {
+                onClick: clearFilters,
+                style: { padding: "0 14px", height: 38, background: `${DS.glow}18`, border: `1px solid ${DS.glow}40`, borderRadius: 8, color: DS.glow, fontSize: 12, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" }
+            }, "✕ Limpiar filtros"),
+            React.createElement("div", { style: { fontSize: 12, color: DS.textDim, whiteSpace: "nowrap" } },
+                filtered.length, " términos")
+        ),
+
+        // Letter index
+        React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 16, padding: "10px 12px", background: DS.surface, border: `1px solid ${DS.border}`, borderRadius: 10 } },
+            DICT_LETTERS.map(l =>
+                React.createElement("button", {
+                    key: l, onClick: () => { setActiveLetter(activeLetter === l ? null : l); setSearch(''); setActivecat(null); },
+                    style: {
+                        width: 30, height: 30, borderRadius: 6, border: activeLetter === l ? `1px solid ${DS.glow}` : `1px solid ${DS.border}`,
+                        background: activeLetter === l ? `${DS.glow}18` : "transparent",
+                        color: activeLetter === l ? DS.glow : DS.textMid,
+                        fontSize: 13, fontWeight: 700, cursor: "pointer", transition: "all .1s"
+                    }
+                }, l)
+            )
+        ),
+
+        // Category pills
+        React.createElement("div", { style: { display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 20 } },
+            DICT_CATEGORIES.map(cat => {
+                const color = getCatColor(cat);
+                const isActive = activecat === cat;
+                return React.createElement("button", {
+                    key: cat, onClick: () => { setActivecat(isActive ? null : cat); setSearch(''); setActiveLetter(null); },
+                    style: {
+                        padding: "4px 11px", borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: "pointer",
+                        border: `1px solid ${isActive ? color : color + "50"}`,
+                        background: isActive ? `${color}20` : "transparent",
+                        color: isActive ? color : DS.textMid, transition: "all .1s"
+                    }
+                }, cat);
+            })
+        ),
+
+        // Results — grouped by letter
+        filtered.length === 0 ?
+            React.createElement("div", { style: { textAlign: "center", padding: "60px 20px", color: DS.textDim } },
+                React.createElement(BookOpen, { size: 40, color: DS.border, style: { margin: "0 auto 12px", display: "block" } }),
+                React.createElement("div", { style: { fontSize: 15, fontWeight: 600, marginBottom: 4 } }, "Sin resultados"),
+                React.createElement("div", { style: { fontSize: 12 } }, "Intenta con otra búsqueda o limpia los filtros")
+            ) :
+            React.createElement("div", null,
+                Object.keys(byLetter).sort().map(letter =>
+                    React.createElement("div", { key: letter, style: { marginBottom: 20 } },
+                        // Letter header
+                        React.createElement("div", { style: { display: "flex", alignItems: "center", gap: 12, marginBottom: 10 } },
+                            React.createElement("div", { style: { width: 36, height: 36, borderRadius: 8, background: `${DS.glow}18`, border: `1px solid ${DS.glow}30`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 900, color: DS.glow, flexShrink: 0 } }, letter),
+                            React.createElement("div", { style: { flex: 1, height: 1, background: DS.border } }),
+                            React.createElement("div", { style: { fontSize: 11, color: DS.textDim, fontWeight: 500 } }, byLetter[letter].length, " términos")
+                        ),
+                        // Terms in this letter
+                        React.createElement("div", { style: { display: "grid", gap: 6 } },
+                            byLetter[letter].map(entry => {
+                                const isOpen = expanded === entry.t;
+                                const color = getCatColor(entry.cat);
+                                return React.createElement("div", {
+                                    key: entry.t,
+                                    style: { background: DS.surface, border: `1px solid ${isOpen ? color + '50' : DS.border}`, borderRadius: 10, overflow: "hidden", transition: "border-color .15s" }
+                                },
+                                    // Term header (always visible)
+                                    React.createElement("button", {
+                                        onClick: () => setExpanded(isOpen ? null : entry.t),
+                                        style: { width: "100%", display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", background: "transparent", border: "none", cursor: "pointer", textAlign: "left" }
+                                    },
+                                        React.createElement("div", { style: { flex: 1, display: "flex", alignItems: "center", gap: 10 } },
+                                            React.createElement("span", { style: { fontSize: 14, fontWeight: 700, color: DS.text } }, entry.t),
+                                            React.createElement("span", {
+                                                style: { padding: "2px 8px", borderRadius: 20, fontSize: 10, fontWeight: 600, background: `${color}15`, color, border: `1px solid ${color}30`, whiteSpace: "nowrap" }
+                                            }, entry.cat)
+                                        ),
+                                        React.createElement(isOpen ? ChevronUp : ChevronDown, { size: 15, color: DS.textDim })
+                                    ),
+                                    // Definition (expanded)
+                                    isOpen && React.createElement("div", { style: { padding: "0 16px 16px 16px", borderTop: `1px solid ${DS.border}` } },
+                                        React.createElement("p", { style: { margin: "12px 0 0", fontSize: 13, lineHeight: 1.7, color: DS.textMid } }, entry.d)
+                                    )
+                                );
+                            })
+                        )
+                    )
+                )
+            )
+    );
+};
 const ViewRRHH = ({ db, upsertEmployee, deleteEmployee, upsertLocation, deleteLocation, upsertDepartment, deleteDepartment, upsertSystemUser }) => {
     const { t } = useT();
     const [tab, setTab] = useState("onboarding");
@@ -13205,6 +13570,7 @@ const ViewRRHH = ({ db, upsertEmployee, deleteEmployee, upsertLocation, deleteLo
         { id: "departments",   label: t("rrhh_tab_departments"), icon: Building2     },
         { id: "locations",     label: t("rrhh_tab_locations"),   icon: MapPin        },
         { id: "organigrama",   label: "ORGANIGRAMA",              icon: GitBranch     },
+        { id: "diccionario",   label: t("rrhh_tab_diccionario"), icon: BookOpen      },
     ];
 
     return React.createElement("div", null,
@@ -13561,7 +13927,8 @@ const ViewRRHH = ({ db, upsertEmployee, deleteEmployee, upsertLocation, deleteLo
 
         // ── TAB: LOCATIONS ─────────────────────────────────────────
         tab === "locations" && React.createElement(ViewLocations, { db, upsertLocation, deleteLocation }),
-        tab === "organigrama" && React.createElement(ViewOrganigrama, { db })
+        tab === "organigrama" && React.createElement(ViewOrganigrama, { db }),
+        tab === "diccionario" && React.createElement(DiccionarioRRHH, null)
     );
 };
 const NAV = [
