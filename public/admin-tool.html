@@ -1,0 +1,953 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TimeClock Enterprise — Panel de Implementación</title>
+<script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
+<style>
+/* ── Reset & base ──────────────────────────────────────────────── */
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0f0e0c;--surface:#1a1917;--surface2:#222120;--surface3:#2a2927;
+  --border:#333230;--border2:#444240;
+  --text:#e8e4de;--textMid:#a09890;--textDim:#666058;
+  --glow:#c8714a;--glowA:#e8a060;--glowG:#4a9e7a;--glowB:#5a8ec8;--glowR:#c84a4a;
+  --radius:10px;--sans:'Inter',system-ui,sans-serif;--mono:'JetBrains Mono','Fira Mono',monospace;
+}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;font-size:14px;line-height:1.5}
+input,select,textarea{background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--sans);font-size:13px;padding:8px 11px;width:100%;outline:none;transition:border-color .15s}
+input:focus,select:focus,textarea:focus{border-color:var(--glow)}
+input::placeholder{color:var(--textDim)}
+select option{background:var(--surface2)}
+button{cursor:pointer;font-family:var(--sans)}
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+/* ── Layout ────────────────────────────────────────────────────── */
+.shell{display:flex;min-height:100vh}
+.sidebar{width:220px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;position:sticky;top:0;height:100vh}
+.main{flex:1;overflow-y:auto}
+/* ── Sidebar ───────────────────────────────────────────────────── */
+.sb-logo{padding:20px 16px 16px;border-bottom:1px solid var(--border)}
+.sb-logo-title{font-size:13px;font-weight:700;color:var(--glow);letter-spacing:.08em;text-transform:uppercase}
+.sb-logo-sub{font-size:10px;color:var(--textDim);margin-top:2px}
+.sb-nav{flex:1;padding:12px 8px;display:flex;flex-direction:column;gap:2px}
+.sb-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;color:var(--textMid);font-size:13px;font-weight:500;border:none;background:none;width:100%;text-align:left;transition:all .12s}
+.sb-item:hover{background:var(--surface2);color:var(--text)}
+.sb-item.active{background:rgba(200,113,74,.12);color:var(--glow)}
+.sb-item svg{flex-shrink:0;opacity:.7}
+.sb-item.active svg{opacity:1}
+.sb-footer{padding:12px 16px;border-top:1px solid var(--border)}
+.sb-user{font-size:12px;color:var(--textDim)}
+.sb-user strong{color:var(--textMid);display:block;font-size:13px}
+/* ── Page header ───────────────────────────────────────────────── */
+.page-header{padding:24px 32px 0;border-bottom:1px solid var(--border);margin-bottom:0}
+.page-title{font-size:20px;font-weight:700;color:var(--text);margin-bottom:4px}
+.page-sub{font-size:13px;color:var(--textDim);padding-bottom:20px}
+.page-body{padding:24px 32px}
+/* ── Cards ─────────────────────────────────────────────────────── */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px 22px}
+.card-title{font-size:13px;font-weight:600;color:var(--textMid);margin-bottom:14px;text-transform:uppercase;letter-spacing:.06em}
+/* ── Forms ─────────────────────────────────────────────────────── */
+.field{display:flex;flex-direction:column;gap:5px;margin-bottom:12px}
+.field label{font-size:11px;color:var(--textMid);font-weight:500;letter-spacing:.03em}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+.required::after{content:' *';color:var(--glow)}
+/* ── Buttons ───────────────────────────────────────────────────── */
+.btn{display:inline-flex;align-items:center;gap:7px;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;border:none;transition:all .12s}
+.btn-primary{background:var(--glow);color:#fff}
+.btn-primary:hover{background:var(--glowA)}
+.btn-secondary{background:var(--surface2);color:var(--textMid);border:1px solid var(--border2)}
+.btn-secondary:hover{color:var(--text);border-color:var(--border2)}
+.btn-danger{background:rgba(200,74,74,.15);color:var(--glowR);border:1px solid rgba(200,74,74,.3)}
+.btn-success{background:rgba(74,158,122,.15);color:var(--glowG);border:1px solid rgba(74,158,122,.3)}
+.btn-sm{padding:5px 12px;font-size:12px}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+/* ── Status badges ─────────────────────────────────────────────── */
+.badge{display:inline-flex;align-items:center;gap:4px;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600}
+.badge-active{background:rgba(74,158,122,.15);color:var(--glowG)}
+.badge-draft{background:rgba(160,152,144,.12);color:var(--textMid)}
+.badge-provisioning{background:rgba(90,142,200,.15);color:var(--glowB)}
+.badge-db_ready{background:rgba(74,158,122,.1);color:var(--glowG)}
+.badge-error{background:rgba(200,74,74,.15);color:var(--glowR)}
+.badge-suspended{background:rgba(200,74,74,.1);color:var(--glowR)}
+.badge-mx{background:rgba(200,113,74,.12);color:var(--glow)}
+.badge-us{background:rgba(74,158,122,.12);color:var(--glowG)}
+.badge-dr{background:rgba(90,142,200,.12);color:var(--glowB)}
+.badge-sv{background:rgba(160,120,74,.12);color:#c8a060}
+/* ── Step wizard ────────────────────────────────────────────────── */
+.wiz-steps{display:flex;gap:0;margin-bottom:28px}
+.wiz-step{flex:1;position:relative}
+.wiz-step-bar{height:3px;background:var(--border2);transition:background .3s}
+.wiz-step.done .wiz-step-bar{background:var(--glow)}
+.wiz-step.active .wiz-step-bar{background:var(--glow);opacity:.4}
+.wiz-step-label{font-size:10px;color:var(--textDim);margin-top:5px;font-weight:500;letter-spacing:.04em;text-transform:uppercase}
+.wiz-step.done .wiz-step-label,.wiz-step.active .wiz-step-label{color:var(--glow)}
+/* ── Table ─────────────────────────────────────────────────────── */
+.tbl{width:100%;border-collapse:collapse}
+.tbl th{font-size:11px;color:var(--textDim);font-weight:600;text-align:left;padding:8px 12px;border-bottom:1px solid var(--border);letter-spacing:.05em;text-transform:uppercase}
+.tbl td{padding:11px 12px;border-bottom:1px solid var(--border);font-size:13px;color:var(--text);vertical-align:middle}
+.tbl tr:hover td{background:rgba(255,255,255,.02)}
+.tbl tr:last-child td{border-bottom:none}
+/* ── Country selector ──────────────────────────────────────────── */
+.country-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.country-btn{display:flex;align-items:center;gap:10px;padding:11px 13px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--textMid);font-size:13px;width:100%;text-align:left;transition:all .12s;cursor:pointer}
+.country-btn:hover{border-color:var(--border2);color:var(--text)}
+.country-btn.sel{border-color:var(--glow);background:rgba(200,113,74,.08);color:var(--glow)}
+.country-flag{font-size:20px;line-height:1}
+/* ── Cred box ───────────────────────────────────────────────────── */
+.cred-box{background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:13px 16px;display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.cred-label{font-size:10px;color:var(--textDim);font-weight:500;margin-bottom:3px;letter-spacing:.04em;text-transform:uppercase}
+.cred-val{font-family:var(--mono);font-size:14px;color:var(--text);font-weight:500;letter-spacing:.04em}
+.cred-val.pwd{color:var(--glowA)}
+/* ── Alerts ────────────────────────────────────────────────────── */
+.alert{padding:11px 14px;border-radius:8px;font-size:13px;margin-bottom:14px;display:flex;align-items:flex-start;gap:8px}
+.alert-warn{background:rgba(200,160,74,.1);border:1px solid rgba(200,160,74,.25);color:#c8a04a}
+.alert-err{background:rgba(200,74,74,.1);border:1px solid rgba(200,74,74,.25);color:var(--glowR)}
+.alert-ok{background:rgba(74,158,122,.1);border:1px solid rgba(74,158,122,.25);color:var(--glowG)}
+.alert-info{background:rgba(90,142,200,.1);border:1px solid rgba(90,142,200,.25);color:var(--glowB)}
+/* ── Misc ──────────────────────────────────────────────────────── */
+.mono{font-family:var(--mono);font-size:12px;color:var(--textMid)}
+.divider{height:1px;background:var(--border);margin:20px 0}
+.spin{animation:spin 1s linear infinite;display:inline-block}
+@keyframes spin{to{transform:rotate(360deg)}}
+.dot-pulse::after{content:'';animation:dots 1.2s steps(4,end) infinite}
+@keyframes dots{0%{content:''}25%{content:'.'}50%{content:'..'}75%{content:'...'}100%{content:''}}
+.empty{text-align:center;padding:48px 20px;color:var(--textDim)}
+.empty-icon{font-size:40px;margin-bottom:12px;opacity:.4}
+.login-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg)}
+.login-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:36px 40px;width:360px}
+.login-title{font-size:18px;font-weight:700;color:var(--glow);margin-bottom:4px}
+.login-sub{font-size:12px;color:var(--textDim);margin-bottom:24px}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+// Verificar que React cargó correctamente desde el CDN
+if (typeof React === "undefined") {
+  document.getElementById("root").innerHTML = [
+    '<div style="color:#c84a4a;font-family:sans-serif;padding:60px;text-align:center;background:#0f0e0c;min-height:100vh">',
+    '<div style="font-size:48px;margin-bottom:16px">⚠️</div>',
+    '<h2 style="margin-bottom:8px;color:#e8e4de">Error al cargar React</h2>',
+    '<p style="color:#a09890;margin-bottom:24px">No se pudo conectar al CDN. Verifica tu conexión a internet y recarga.</p>',
+    '<button onclick="location.reload()" style="padding:10px 28px;background:#c8714a;color:white;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600">Recargar página</button>',
+    '</div>'
+  ].join('');
+  throw new Error("React no disponible - verifica conexión al CDN");
+}
+const { createElement:h, useState, useEffect, useCallback, useRef } = React;
+
+// ── API helper ───────────────────────────────────────────────────────────
+const API = {
+  async call(method, url, body) {
+    const res = await fetch(url, {
+      method,
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    return data;
+  },
+  get:  (url)       => API.call('GET',    url),
+  post: (url, body) => API.call('POST',   url, body),
+  put:  (url, body) => API.call('PUT',    url, body),
+};
+
+// ── Icons ────────────────────────────────────────────────────────────────
+const Icon = ({ d, size=16, color='currentColor' }) =>
+  h('svg', { width:size, height:size, viewBox:'0 0 24 24', fill:'none', stroke:color, strokeWidth:2, strokeLinecap:'round', strokeLinejoin:'round' },
+    h('path', { d }));
+const IUsers    = ({s=16}) => h(Icon, { d:'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75', size:s });
+const IPlus     = ({s=16}) => h(Icon, { d:'M12 5v14M5 12h14', size:s });
+const IDB       = ({s=16}) => h(Icon, { d:'M12 2C6.48 2 2 4.24 2 7v10c0 2.76 4.48 5 10 5s10-2.24 10-5V7c0-2.76-4.48-5-10-5z M2 12c0 2.76 4.48 5 10 5s10-2.24 10-5 M2 7c0 2.76 4.48 5 10 5s10-2.24 10-5', size:s });
+const IKey      = ({s=16}) => h(Icon, { d:'M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4', size:s });
+const ICheck    = ({s=16}) => h(Icon, { d:'M20 6L9 17l-5-5', size:s });
+const ICopy     = ({s=14}) => h(Icon, { d:'M8 17.929H6c-1.105 0-2-.912-2-2.036V5.036C4 3.91 4.895 3 6 3h8c1.105 0 2 .911 2 2.036v1.866m-6 .17h8c1.105 0 2 .91 2 2.035v10.857C20 21.09 19.105 22 18 22h-8c-1.105 0-2-.911-2-2.036V9.107c0-1.124.895-2.036 2-2.036z', size:s });
+const IRefresh  = ({s=16}) => h(Icon, { d:'M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15', size:s });
+const IHome     = ({s=16}) => h(Icon, { d:'M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z M9 22V12h6v10', size:s });
+const ILogout   = ({s=16}) => h(Icon, { d:'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9', size:s });
+const IDownload = ({s=16}) => h(Icon, { d:'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3', size:s });
+const ILogin    = ({s=16}) => h(Icon, { d:'M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3', size:s });
+const IWarn     = ({s=16}) => h(Icon, { d:'M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0zM12 9v4M12 17h.01', size:s });
+const IEye      = ({s=14}) => h(Icon, { d:'M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z M12 12a3 3 0 1 0 0-6 3 3 0 0 0 0 6z', size:s });
+
+// ── Countries config ──────────────────────────────────────────────────────
+const COUNTRIES = [
+  { code:'MX', flag:'🇲🇽', name:'México',             fiscalFields:[
+    { key:'rfc',      label:'RFC' },
+    { key:'regimen',  label:'Régimen fiscal SAT' },
+    { key:'pac',      label:'PAC certificado' },
+    { key:'imssKey',  label:'Clave patronal IMSS' },
+    { key:'cfdi',     label:'CFDI 4.0 activo', type:'toggle' },
+  ]},
+  { code:'US', flag:'🇺🇸', name:'Estados Unidos',     fiscalFields:[
+    { key:'ein',      label:'EIN (XX-XXXXXXX)' },
+    { key:'state',    label:'Estado de incorporación' },
+    { key:'payroll',  label:'Tipo nómina (W-2 / 1099)' },
+    { key:'stateCode',label:'Código estatal' },
+  ]},
+  { code:'DR', flag:'🇩🇴', name:'Rep. Dominicana',    fiscalFields:[
+    { key:'rnc',      label:'RNC' },
+    { key:'ncf',      label:'Tipo de comprobante fiscal' },
+    { key:'tss',      label:'Régimen TSS' },
+  ]},
+  { code:'SV', flag:'🇸🇻', name:'El Salvador',        fiscalFields:[
+    { key:'nit',      label:'NIT' },
+    { key:'nrc',      label:'NRC' },
+    { key:'iss',      label:'Régimen ISS' },
+  ]},
+];
+
+// ── Login ────────────────────────────────────────────────────────────────
+function LoginScreen({ onLogin }) {
+  const [user, setUser]   = useState('');
+  const [pwd,  setPwd]    = useState('');
+  const [err,  setErr]    = useState('');
+  const [busy, setBusy]   = useState(false);
+
+  const submit = async () => {
+    if (!user || !pwd) { setErr('Ingresa usuario y contraseña'); return; }
+    setBusy(true); setErr('');
+    try {
+      const data = await API.post('/api/auth/login', { username: user, password: pwd });
+      onLogin(data.operator);
+    } catch(e) { setErr(e.message); }
+    finally { setBusy(false); }
+  };
+
+  return h('div', { className:'login-wrap' },
+    h('div', { className:'login-card' },
+      h('div', { className:'login-title' }, 'TimeClock Enterprise'),
+      h('div', { className:'login-sub' }, 'Panel de implementación interna'),
+      err && h('div', { className:'alert alert-err', style:{marginBottom:16} }, err),
+      h('div', { className:'field' },
+        h('label', null, 'Usuario'),
+        h('input', { value:user, onChange:e=>setUser(e.target.value), onKeyDown:e=>e.key==='Enter'&&submit(), placeholder:'superadmin' })
+      ),
+      h('div', { className:'field', style:{marginBottom:20} },
+        h('label', null, 'Contraseña'),
+        h('input', { type:'password', value:pwd, onChange:e=>setPwd(e.target.value), onKeyDown:e=>e.key==='Enter'&&submit() })
+      ),
+      h('button', { className:'btn btn-primary', style:{width:'100%',justifyContent:'center'}, onClick:submit, disabled:busy },
+        busy ? '⏳ Verificando...' : 'Entrar'
+      )
+    )
+  );
+}
+
+// ── WIZARD: formulario de nuevo cliente (5 pasos) ─────────────────────────
+const WIZ_STEPS = ['Empresa', 'País y cálculo', 'Datos fiscales', 'Sucursales y logo', 'Confirmar'];
+
+function WizardNew({ onCreated, onCancel }) {
+  const [step, setStep]   = useState(0);
+  const [data, setData]   = useState({
+    company:   { name:'', legalName:'' },
+    contact:   { adminName:'', adminEmail:'', phone:'' },
+    countries: ['MX'],
+    fiscal:    {},
+    billing:   { invoices:true },
+    branches:  [],
+    startDate: new Date().toISOString().slice(0,10),
+    employeesEstimated: '',
+    notes: '',
+  });
+  const [plan,  setPlan]  = useState('profesional');
+  const [busy,  setBusy]  = useState(false);
+  const [err,   setErr]   = useState('');
+
+  const setField = (path, val) => setData(d => {
+    const copy = JSON.parse(JSON.stringify(d));
+    const keys = path.split('.');
+    let obj = copy;
+    for (let i=0; i<keys.length-1; i++) obj = obj[keys[i]];
+    obj[keys[keys.length-1]] = val;
+    return copy;
+  });
+
+  const toggleCountry = code => setData(d => ({
+    ...d,
+    countries: d.countries.includes(code) ? d.countries.filter(c=>c!==code) : [...d.countries, code]
+  }));
+
+  const addBranch = () => setData(d => ({ ...d, branches: [...d.branches, { name:'', city:'' }] }));
+  const setBranch = (i, k, v) => setData(d => {
+    const brs = [...d.branches];
+    brs[i] = { ...brs[i], [k]: v };
+    return { ...d, branches: brs };
+  });
+  const removeBranch = i => setData(d => ({ ...d, branches: d.branches.filter((_,j)=>j!==i) }));
+
+  const validate = () => {
+    if (step===0 && !data.company.name) return 'El nombre de la empresa es requerido';
+    if (step===0 && !data.contact.adminEmail) return 'El email del administrador es requerido';
+    if (step===1 && data.countries.length===0) return 'Selecciona al menos un país';
+    return '';
+  };
+
+  const next = () => { const e=validate(); if(e){setErr(e);return;} setErr(''); setStep(s=>s+1); };
+  const prev = () => { setErr(''); setStep(s=>s-1); };
+
+  const submit = async () => {
+    setBusy(true); setErr('');
+    try {
+      const res = await API.post('/api/clients', { data, plan });
+      onCreated(res.client);
+    } catch(e) { setErr(e.message); setBusy(false); }
+  };
+
+  // Step 0: Datos de empresa
+  const renderStep0 = () => h('div', null,
+    h('div', { className:'grid2' },
+      h('div', { className:'field' },
+        h('label', { className:'required' }, 'Nombre comercial'),
+        h('input', { value:data.company.name, placeholder:'Empresa Roja SA de CV', onChange:e=>setField('company.name',e.target.value) })
+      ),
+      h('div', { className:'field' },
+        h('label', null, 'Razón social'),
+        h('input', { value:data.company.legalName, placeholder:'Empresa Roja Sociedad Anónima de CV', onChange:e=>setField('company.legalName',e.target.value) })
+      )
+    ),
+    h('div', { className:'grid3' },
+      h('div', { className:'field' },
+        h('label', null, 'Fecha de inicio'),
+        h('input', { type:'date', value:data.startDate, onChange:e=>setField('startDate',e.target.value) })
+      ),
+      h('div', { className:'field' },
+        h('label', null, 'Empleados estimados'),
+        h('input', { type:'number', value:data.employeesEstimated, placeholder:'50', min:1, onChange:e=>setField('employeesEstimated',e.target.value) })
+      ),
+      h('div', { className:'field' },
+        h('label', null, 'Plan'),
+        h('select', { value:plan, onChange:e=>setPlan(e.target.value) },
+          h('option', { value:'basico' }, 'Básico'),
+          h('option', { value:'profesional' }, 'Profesional'),
+          h('option', { value:'enterprise' }, 'Enterprise')
+        )
+      )
+    ),
+    h('div', { className:'grid2' },
+      h('div', { className:'field' },
+        h('label', { className:'required' }, 'Admin responsable'),
+        h('input', { value:data.contact.adminName, placeholder:'María García', onChange:e=>setField('contact.adminName',e.target.value) })
+      ),
+      h('div', { className:'field' },
+        h('label', { className:'required' }, 'Email del admin'),
+        h('input', { type:'email', value:data.contact.adminEmail, placeholder:'admin@empresa.com', onChange:e=>setField('contact.adminEmail',e.target.value) })
+      )
+    ),
+    h('div', { className:'field' },
+      h('label', null, 'Notas internas'),
+      h('textarea', { value:data.notes, rows:2, placeholder:'Observaciones del proceso de implementación...', onChange:e=>setField('notes',e.target.value), style:{resize:'vertical'} })
+    )
+  );
+
+  // Step 1: Países
+  const renderStep1 = () => h('div', null,
+    h('p', { style:{color:'var(--textMid)',fontSize:13,marginBottom:14} }, 'Selecciona los países donde el cliente calculará nómina. Los campos fiscales se generan automáticamente.'),
+    h('div', { className:'country-grid' },
+      COUNTRIES.map(c => h('button', {
+        key:c.code, className:'country-btn'+(data.countries.includes(c.code)?' sel':''),
+        onClick:()=>toggleCountry(c.code)
+      },
+        h('span', { className:'country-flag' }, c.flag),
+        h('div', null,
+          h('div', { style:{fontWeight:600,fontSize:13} }, c.name),
+          h('div', { style:{fontSize:11,opacity:.7,marginTop:1} }, c.fiscalFields[0].label)
+        ),
+        data.countries.includes(c.code) && h('span', { style:{marginLeft:'auto',color:'var(--glowG)'} }, h(ICheck, {s:14}))
+      ))
+    ),
+    data.countries.length>0 && h('div', { style:{marginTop:14,display:'flex',gap:6,flexWrap:'wrap'} },
+      data.countries.map(code => {
+        const c = COUNTRIES.find(x=>x.code===code);
+        return h('span', { key:code, className:`badge badge-${code.toLowerCase()}` }, c.flag+' '+c.name);
+      })
+    )
+  );
+
+  // Step 2: Datos fiscales
+  const renderStep2 = () => {
+    const selectedCountries = COUNTRIES.filter(c => data.countries.includes(c.code));
+    return h('div', null,
+      selectedCountries.map(c => h('div', { key:c.code, style:{marginBottom:20} },
+        h('div', { style:{display:'flex',alignItems:'center',gap:8,marginBottom:12,paddingBottom:8,borderBottom:'1px solid var(--border)'} },
+          h('span', { style:{fontSize:20} }, c.flag),
+          h('span', { style:{fontWeight:600} }, c.name),
+          h('span', { className:`badge badge-${c.code.toLowerCase()}` }, c.code)
+        ),
+        h('div', { className:'grid2' },
+          c.fiscalFields.filter(f=>f.type!=='toggle').map(f =>
+            h('div', { key:f.key, className:'field' },
+              h('label', null, f.label),
+              h('input', {
+                value: data.fiscal[c.code]?.[f.key] || '',
+                placeholder: f.label,
+                onChange: e => {
+                  const updated = { ...data.fiscal, [c.code]: { ...data.fiscal[c.code], [f.key]: e.target.value } };
+                  setData(d => ({ ...d, fiscal: updated }));
+                }
+              })
+            )
+          )
+        ),
+        c.fiscalFields.filter(f=>f.type==='toggle').map(f =>
+          h('div', { key:f.key, style:{display:'flex',alignItems:'center',justifyContent:'space-between',marginTop:8,padding:'8px 0',borderTop:'1px solid var(--border)'} },
+            h('span', { style:{fontSize:13} }, f.label),
+            h('input', {
+              type:'checkbox',
+              checked: data.fiscal[c.code]?.[f.key] !== false,
+              onChange: e => {
+                const updated = { ...data.fiscal, [c.code]: { ...data.fiscal[c.code], [f.key]: e.target.checked } };
+                setData(d => ({ ...d, fiscal: updated }));
+              },
+              style:{width:'auto',accentColor:'var(--glow)'}
+            })
+          )
+        )
+      )),
+      h('div', { style:{marginTop:8,display:'flex',alignItems:'center',justifyContent:'space-between',padding:'10px 0',borderTop:'1px solid var(--border)'} },
+        h('span', { style:{fontSize:13} }, '¿El cliente emite facturas / comprobantes fiscales?'),
+        h('input', { type:'checkbox', checked:data.billing.invoices, onChange:e=>setField('billing.invoices',e.target.checked), style:{width:'auto',accentColor:'var(--glow)'} })
+      )
+    );
+  };
+
+  // Step 3: Sucursales y logo
+  const renderStep3 = () => h('div', null,
+    h('div', { className:'field', style:{marginBottom:20} },
+      h('label', null, 'URL del logotipo (opcional)'),
+      h('input', { value:data.company.logoUrl||'', placeholder:'https://empresa.com/logo.png', onChange:e=>setField('company.logoUrl',e.target.value) })
+    ),
+    h('div', { style:{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:12} },
+      h('div', { style:{fontWeight:600,fontSize:13} }, 'Sucursales'),
+      h('button', { className:'btn btn-secondary btn-sm', onClick:addBranch },
+        h(IPlus, {s:13}), ' Agregar'
+      )
+    ),
+    data.branches.length===0 && h('div', { style:{color:'var(--textDim)',fontSize:13,padding:'12px 0'} }, 'Sin sucursales registradas. Puedes agregar después.'),
+    data.branches.map((br, i) =>
+      h('div', { key:i, style:{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:8,padding:'12px 14px',marginBottom:8,display:'grid',gridTemplateColumns:'1fr 1fr auto',gap:10,alignItems:'end'} },
+        h('div', { className:'field', style:{margin:0} },
+          h('label', null, 'Nombre'),
+          h('input', { value:br.name, placeholder:'Matriz Norte', onChange:e=>setBranch(i,'name',e.target.value) })
+        ),
+        h('div', { className:'field', style:{margin:0} },
+          h('label', null, 'Ciudad'),
+          h('input', { value:br.city, placeholder:'Monterrey', onChange:e=>setBranch(i,'city',e.target.value) })
+        ),
+        h('button', { style:{background:'rgba(200,74,74,.1)',border:'1px solid rgba(200,74,74,.2)',borderRadius:6,padding:'7px 10px',color:'var(--glowR)',cursor:'pointer'}, onClick:()=>removeBranch(i) }, '✕')
+      )
+    )
+  );
+
+  // Step 4: Confirmación
+  const renderStep4 = () => {
+    const selC = COUNTRIES.filter(c=>data.countries.includes(c.code));
+    return h('div', null,
+      h('div', { style:{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14,marginBottom:16} },
+        [
+          ['Empresa', data.company.name || '—'],
+          ['Razón social', data.company.legalName || data.company.name],
+          ['Admin responsable', data.contact.adminName || '—'],
+          ['Email admin', data.contact.adminEmail || '—'],
+          ['Plan', plan],
+          ['Inicio', data.startDate],
+          ['Empleados estimados', data.employeesEstimated || '—'],
+          ['Sucursales', data.branches.length===0 ? 'Sin sucursales' : data.branches.length+' registradas'],
+          ['Facturación', data.billing.invoices ? 'Sí' : 'No'],
+        ].map(([k,v]) =>
+          h('div', { key:k, style:{background:'var(--surface2)',border:'1px solid var(--border)',borderRadius:8,padding:'10px 13px'} },
+            h('div', { style:{fontSize:10,color:'var(--textDim)',marginBottom:3,textTransform:'uppercase',letterSpacing:'.04em'} }, k),
+            h('div', { style:{fontSize:13,fontWeight:500} }, v)
+          )
+        )
+      ),
+      h('div', { style:{marginBottom:16} },
+        h('div', { style:{fontSize:11,color:'var(--textDim)',marginBottom:6,textTransform:'uppercase',letterSpacing:'.04em'} }, 'Países de cálculo'),
+        h('div', { style:{display:'flex',gap:6,flexWrap:'wrap'} },
+          selC.map(c => h('span', { key:c.code, className:`badge badge-${c.code.toLowerCase()}` }, c.flag+' '+c.name))
+        )
+      ),
+      h('div', { className:'alert alert-info' },
+        h(IDB, {s:15}),
+        h('div', null,
+          h('strong', null, 'Siguiente paso: provisión de base de datos'), h('br', null),
+          'Al confirmar, se guardará el registro del cliente. Luego podrás provisionar la base de datos en Railway y generar las credenciales del administrador.'
+        )
+      )
+    );
+  };
+
+  const panels = [renderStep0, renderStep1, renderStep2, renderStep3, renderStep4];
+
+  return h('div', null,
+    // Steps bar
+    h('div', { className:'wiz-steps', style:{gap:6} },
+      WIZ_STEPS.map((s,i) => h('div', { key:i, className:'wiz-step'+(i<step?' done':i===step?' active':'') },
+        h('div', { className:'wiz-step-bar' }),
+        h('div', { className:'wiz-step-label', style:{fontSize:9} }, s)
+      ))
+    ),
+    // Panel
+    h('div', { className:'card', style:{marginBottom:14} },
+      panels[step]()
+    ),
+    // Error
+    err && h('div', { className:'alert alert-err', style:{marginBottom:12} }, err),
+    // Nav
+    h('div', { style:{display:'flex',justifyContent:'space-between',alignItems:'center'} },
+      h('div', { style:{display:'flex',gap:8} },
+        h('button', { className:'btn btn-secondary', onClick:onCancel }, 'Cancelar'),
+        step>0 && h('button', { className:'btn btn-secondary', onClick:prev }, '← Atrás')
+      ),
+      step<WIZ_STEPS.length-1
+        ? h('button', { className:'btn btn-primary', onClick:next }, 'Siguiente →')
+        : h('button', { className:'btn btn-primary', onClick:submit, disabled:busy },
+            busy ? '⏳ Guardando...' : h(ICheck, {s:14}), ' Crear cliente'
+          )
+    )
+  );
+}
+
+// ── PANTALLA DE SETUP INICIAL ─────────────────────────────────────────────
+function SetupScreen({ client, onDone }) {
+  const [dbStatus, setDbStatus]   = useState(client.db_status || 'not_started');
+  const [polling,  setPolling]    = useState(false);
+  const [creds,    setCreds]      = useState(null);
+  const [busy,     setBusy]       = useState(false);
+  const [err,      setErr]        = useState('');
+  const [copied,   setCopied]     = useState({});
+  const pollRef = useRef(null);
+
+  // Si la DB ya está ready y hay admin creado, mostrar credenciales guardadas
+  useEffect(() => {
+    if (dbStatus === 'ready' || dbStatus === 'db_ready') {
+      // Verificar si ya tiene admin
+      if (client.admin_username) {
+        // Tiene admin — solo mostrar opción de recuperar
+        setCreds({ existing: true, username: client.admin_username });
+      }
+    }
+  }, []);
+
+  const startPolling = () => {
+    setPolling(true);
+    pollRef.current = setInterval(async () => {
+      try {
+        const r = await API.get(`/api/clients/${client.id}/db-status`);
+        setDbStatus(r.status);
+        if (r.status === 'ready') {
+          clearInterval(pollRef.current);
+          setPolling(false);
+        }
+        if (r.status === 'error') {
+          clearInterval(pollRef.current);
+          setPolling(false);
+          setErr('Error en Railway: ' + (r.error_msg || 'desconocido'));
+        }
+      } catch(e) { /* silencioso */ }
+    }, 4000);
+  };
+
+  useEffect(() => () => clearInterval(pollRef.current), []);
+
+  const provision = async () => {
+    setBusy(true); setErr('');
+    try {
+      await API.post(`/api/clients/${client.id}/provision`, {});
+      setDbStatus('creating');
+      startPolling();
+    } catch(e) { setErr(e.message); }
+    finally { setBusy(false); }
+  };
+
+  const generateCreds = async () => {
+    setBusy(true); setErr('');
+    try {
+      const r = await API.post(`/api/clients/${client.id}/setup`, {});
+      setCreds(r.credentials);
+    } catch(e) { setErr(e.message); }
+    finally { setBusy(false); }
+  };
+
+  const recoverCreds = async () => {
+    setBusy(true); setErr('');
+    try {
+      const r = await API.get(`/api/clients/${client.id}/credentials`);
+      setCreds(r);
+    } catch(e) { setErr(e.message); }
+    finally { setBusy(false); }
+  };
+
+  const copyToClipboard = (key, val) => {
+    navigator.clipboard.writeText(val).catch(()=>{});
+    setCopied(c => ({ ...c, [key]: true }));
+    setTimeout(() => setCopied(c => ({ ...c, [key]: false })), 2000);
+  };
+
+  const isDbReady = dbStatus === 'ready' || dbStatus === 'db_ready' || dbStatus === 'active';
+
+  return h('div', null,
+    h('div', { className:'page-header' },
+      h('div', { style:{display:'flex',alignItems:'center',justifyContent:'space-between'} },
+        h('div', null,
+          h('div', { className:'page-title' }, 'Setup inicial — '+(client.company_name || client.slug)),
+          h('div', { className:'page-sub' }, 'Provisión de base de datos y credenciales del administrador')
+        ),
+        h('button', { className:'btn btn-secondary', onClick:onDone }, 'Volver al listado')
+      )
+    ),
+    h('div', { className:'page-body' },
+      err && h('div', { className:'alert alert-err', style:{marginBottom:16} }, h(IWarn,{s:15}), err),
+
+      // ── Paso 1: Provisionar DB ───────────────────────────────────────
+      h('div', { className:'card', style:{marginBottom:14} },
+        h('div', { style:{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14} },
+          h('div', { className:'card-title', style:{margin:0} }, '1 · Base de datos en Railway'),
+          h('span', { className:`badge badge-${dbStatus==='ready'||dbStatus==='active'?'active':dbStatus==='error'?'error':dbStatus==='creating'?'provisioning':'draft'}` },
+            dbStatus==='ready'||dbStatus==='active' ? '✓ Lista' :
+            dbStatus==='creating' ? '⏳ Creando...' :
+            dbStatus==='error'    ? '✕ Error' : 'Pendiente'
+          )
+        ),
+        dbStatus==='creating' && h('div', { className:'alert alert-info' },
+          h('span', { className:'spin' }, '⏳'), ' Creando base de datos en Railway. Esto tarda entre 30 y 90 segundos', h('span', { className:'dot-pulse' })
+        ),
+        !isDbReady && dbStatus!=='creating' &&
+          h('button', { className:'btn btn-primary', onClick:provision, disabled:busy||polling },
+            h(IDB,{s:14}), busy ? ' Iniciando...' : ' Provisionar en Railway'
+          ),
+        isDbReady && h('div', { className:'alert alert-ok' },
+          h(ICheck,{s:15}), ' Base de datos provisionada correctamente en Railway'
+        )
+      ),
+
+      // ── Paso 2: Credenciales ─────────────────────────────────────────
+      h('div', { className:'card', style:{marginBottom:14, opacity: isDbReady?1:.5 } },
+        h('div', { className:'card-title' }, '2 · Credenciales del administrador'),
+        !isDbReady && h('div', { style:{color:'var(--textDim)',fontSize:13} }, 'Disponible después de provisionar la base de datos'),
+        isDbReady && !creds && h('div', null,
+          h('div', { className:'alert alert-warn', style:{marginBottom:14} },
+            h(IWarn,{s:15}),
+            h('div', null,
+              h('strong', null, 'Importante:'), ' Las credenciales se guardan en la base de datos maestra. ',
+              'Podrás recuperarlas en cualquier momento si el cliente las pierde.'
+            )
+          ),
+          client.admin_username
+            ? h('div', null,
+                h('div', { style:{fontSize:13,marginBottom:10} }, 'Ya existe un administrador: ', h('strong', null, client.admin_username)),
+                h('div', { style:{display:'flex',gap:8} },
+                  h('button', { className:'btn btn-secondary', onClick:recoverCreds, disabled:busy }, h(IEye,{s:14}), ' Ver credenciales'),
+                  h('button', { className:'btn btn-primary', onClick:generateCreds, disabled:busy }, h(IRefresh,{s:14}), ' Regenerar')
+                )
+              )
+            : h('button', { className:'btn btn-primary', onClick:generateCreds, disabled:busy },
+                h(IKey,{s:14}), busy ? ' Generando...' : ' Generar credenciales'
+              )
+        ),
+        isDbReady && creds && !creds.existing && h('div', null,
+          ['username','password'].map(k =>
+            h('div', { key:k, className:'cred-box' },
+              h('div', null,
+                h('div', { className:'cred-label' }, k==='username'?'Usuario':'Password'),
+                h('div', { className:'cred-val'+(k==='password'?' pwd':'') }, creds[k])
+              ),
+              h('button', { className:'btn btn-secondary btn-sm', onClick:()=>copyToClipboard(k,creds[k]) },
+                copied[k] ? h(ICheck,{s:13}) : h(ICopy,{s:13}), copied[k] ? ' Copiado' : ' Copiar'
+              )
+            )
+          ),
+          creds.tenantId && h('div', { className:'cred-box' },
+            h('div', null,
+              h('div', { className:'cred-label' }, 'Tenant ID'),
+              h('div', { className:'cred-val mono' }, creds.tenantId)
+            )
+          ),
+          h('div', { style:{marginTop:12,display:'flex',gap:8} },
+            h('button', { className:'btn btn-secondary', onClick:generateCreds }, h(IRefresh,{s:13}), ' Regenerar'),
+            h('button', { className:'btn btn-success' }, h(IDownload,{s:13}), ' Descargar ficha PDF')
+          )
+        ),
+        isDbReady && creds?.existing && h('div', null,
+          h('div', { style:{fontSize:13,color:'var(--textMid)',marginBottom:12} }, 'Admin existente: ', h('strong', null, creds.username)),
+          h('div', { style:{display:'flex',gap:8} },
+            h('button', { className:'btn btn-secondary', onClick:recoverCreds, disabled:busy }, h(IEye,{s:14}), ' Ver credenciales'),
+            h('button', { className:'btn btn-secondary', onClick:generateCreds, disabled:busy }, h(IRefresh,{s:14}), ' Regenerar')
+          )
+        )
+      ),
+
+      // ── Acciones finales ─────────────────────────────────────────────
+      isDbReady && creds && !creds.existing && h('div', { style:{display:'flex',gap:10,justifyContent:'flex-end'} },
+        h('button', { className:'btn btn-secondary', onClick:onDone }, 'Volver al listado'),
+        h('button', { className:'btn btn-primary',
+          onClick:()=>window.open(`/login?clientSlug=${client.slug}`, '_blank') },
+          h(ILogin,{s:14}), ' Entrar como este cliente'
+        )
+      )
+    )
+  );
+}
+
+// ── LISTADO DE CLIENTES ───────────────────────────────────────────────────
+function ClientList({ onNew, onSetup, onRefresh }) {
+  const [clients, setClients] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search,  setSearch]  = useState('');
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try { setClients(await API.get('/api/clients')); }
+    catch(e) { console.error(e); }
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { load(); }, []);
+
+  const filtered = clients.filter(c =>
+    !search || (c.company_name||'').toLowerCase().includes(search.toLowerCase()) ||
+    c.slug.includes(search.toLowerCase())
+  );
+
+  const statusBadge = status => {
+    const map = { active:'active', draft:'draft', provisioning:'provisioning', db_ready:'db_ready', error:'error', suspended:'suspended' };
+    const labels = { active:'Activo', draft:'Borrador', provisioning:'Provisionando', db_ready:'DB Lista', error:'Error', suspended:'Suspendido' };
+    return h('span', { className:`badge badge-${map[status]||'draft'}` }, labels[status]||status);
+  };
+
+  return h('div', null,
+    h('div', { className:'page-header' },
+      h('div', { style:{display:'flex',alignItems:'center',justifyContent:'space-between'} },
+        h('div', null,
+          h('div', { className:'page-title' }, 'Clientes'),
+          h('div', { className:'page-sub' }, `${clients.length} clientes registrados`)
+        ),
+        h('button', { className:'btn btn-primary', onClick:onNew }, h(IPlus,{s:14}), ' Nuevo cliente')
+      )
+    ),
+    h('div', { className:'page-body' },
+      h('div', { style:{marginBottom:16} },
+        h('input', { value:search, placeholder:'Buscar por empresa o slug...', onChange:e=>setSearch(e.target.value), style:{maxWidth:320} })
+      ),
+      loading ? h('div', { className:'empty' }, h('div', { className:'spin' }, '⏳'), h('div', { style:{marginTop:12} }, 'Cargando clientes...'))
+      : filtered.length===0 ? h('div', { className:'empty' },
+          h('div', { className:'empty-icon' }, '🏢'),
+          h('div', { style:{fontWeight:600,marginBottom:6} }, search ? 'Sin resultados' : 'Aún no hay clientes'),
+          !search && h('button', { className:'btn btn-primary', onClick:onNew, style:{marginTop:12} }, h(IPlus,{s:14}), ' Registrar primer cliente')
+        )
+      : h('div', { className:'card', style:{padding:0} },
+          h('table', { className:'tbl' },
+            h('thead', null,
+              h('tr', null,
+                ['Empresa','Slug','Plan','Países','DB','Estado','Admin','Acciones'].map(th =>
+                  h('th', { key:th }, th)
+                )
+              )
+            ),
+            h('tbody', null,
+              filtered.map(c => h('tr', { key:c.id },
+                h('td', null,
+                  h('div', { style:{fontWeight:600} }, c.company_name || '—'),
+                  c.admin_email && h('div', { style:{fontSize:11,color:'var(--textDim)',marginTop:2} }, c.admin_email)
+                ),
+                h('td', null, h('span', { className:'mono' }, c.slug)),
+                h('td', null, h('span', { style:{textTransform:'capitalize'} }, c.sub_plan||c.plan||'—')),
+                h('td', null,
+                  h('div', { style:{display:'flex',gap:4,flexWrap:'wrap'} },
+                    (Array.isArray(c.countries)?c.countries:JSON.parse(c.countries||'[]')).map(code => {
+                      const country = COUNTRIES.find(x=>x.code===code);
+                      return h('span', { key:code }, country?.flag||code);
+                    })
+                  )
+                ),
+                h('td', null,
+                  h('span', { className:`badge badge-${c.db_status==='ready'?'active':c.db_status==='error'?'error':'draft'}` },
+                    c.db_status==='ready'?'✓ Lista':c.db_status==='creating'?'⏳':c.db_status||'—'
+                  )
+                ),
+                h('td', null, statusBadge(c.status)),
+                h('td', null,
+                  c.admin_username
+                    ? h('div', null,
+                        h('div', { style:{fontSize:12,fontFamily:'var(--mono)'} }, c.admin_username),
+                        c.admin_last_login && h('div', { style:{fontSize:11,color:'var(--textDim)'},
+                          title:'Último login' }, '↩ '+new Date(c.admin_last_login).toLocaleDateString('es-MX'))
+                      )
+                    : h('span', { style:{color:'var(--textDim)',fontSize:12} }, '—')
+                ),
+                h('td', null,
+                  h('button', {
+                    className:'btn btn-secondary btn-sm',
+                    onClick:()=>onSetup(c),
+                    title: c.status==='active'?'Ver setup':'Continuar setup'
+                  }, c.status==='active'?'Ver':'Setup →')
+                )
+              ))
+            )
+          )
+        )
+    )
+  );
+}
+
+// ── DASHBOARD / STATS ─────────────────────────────────────────────────────
+function Dashboard() {
+  const [stats, setStats] = useState(null);
+
+  useEffect(() => {
+    API.get('/api/clients').then(clients => {
+      setStats({
+        total:       clients.length,
+        active:      clients.filter(c=>c.status==='active').length,
+        provisioning:clients.filter(c=>c.status==='provisioning'||c.status==='db_ready').length,
+        errors:      clients.filter(c=>c.status==='error').length,
+        countries:   [...new Set(clients.flatMap(c=>JSON.parse(c.countries||'[]')))],
+      });
+    }).catch(()=>{});
+  }, []);
+
+  const StatCard = ({ label, value, color }) =>
+    h('div', { style:{background:'var(--surface)',border:'1px solid var(--border)',borderRadius:'var(--radius)',padding:'16px 20px'} },
+      h('div', { style:{fontSize:11,color:'var(--textDim)',fontWeight:500,textTransform:'uppercase',letterSpacing:'.05em',marginBottom:6} }, label),
+      h('div', { style:{fontSize:28,fontWeight:700,color:color||'var(--text)'} }, value??'—')
+    );
+
+  return h('div', null,
+    h('div', { className:'page-header' },
+      h('div', { className:'page-title' }, 'Dashboard'),
+      h('div', { className:'page-sub' }, 'Estado general del sistema TimeClock Enterprise')
+    ),
+    h('div', { className:'page-body' },
+      stats && h('div', { style:{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:14,marginBottom:24} },
+        h(StatCard, { label:'Total clientes', value:stats.total }),
+        h(StatCard, { label:'Activos',        value:stats.active,       color:'var(--glowG)' }),
+        h(StatCard, { label:'En proceso',     value:stats.provisioning, color:'var(--glowB)' }),
+        h(StatCard, { label:'Con error',      value:stats.errors,       color:'var(--glowR)' })
+      ),
+      stats?.countries.length > 0 && h('div', { className:'card' },
+        h('div', { className:'card-title' }, 'Países activos'),
+        h('div', { style:{display:'flex',gap:8,flexWrap:'wrap'} },
+          stats.countries.map(code => {
+            const c = COUNTRIES.find(x=>x.code===code);
+            return h('span', { key:code, className:`badge badge-${code.toLowerCase()}` }, (c?.flag||'')+' '+(c?.name||code));
+          })
+        )
+      )
+    )
+  );
+}
+
+// ── APP PRINCIPAL ─────────────────────────────────────────────────────────
+function App() {
+  const [operator, setOperator] = useState(null);
+  const [checking, setChecking] = useState(true);
+  const [view,     setView]     = useState('dashboard');
+  const [showNew,  setShowNew]  = useState(false);
+  const [setupClient, setSetupClient] = useState(null);
+
+  useEffect(() => {
+    API.get('/api/auth/me')
+      .then(d => setOperator(d.operator))
+      .catch(() => {})
+      .finally(() => setChecking(false));
+  }, []);
+
+  const logout = async () => {
+    await API.post('/api/auth/logout').catch(()=>{});
+    setOperator(null);
+  };
+
+  if (checking) return h('div', { style:{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'100vh',color:'var(--textDim)'} }, '⏳');
+  if (!operator) return h(LoginScreen, { onLogin: op => setOperator(op) });
+
+  const NAV = [
+    { id:'dashboard', label:'Dashboard',  icon:h(IHome,{s:15}) },
+    { id:'clients',   label:'Clientes',   icon:h(IUsers,{s:15}) },
+  ];
+
+  // Pantalla de setup de un cliente específico
+  if (setupClient) return h('div', { className:'shell' },
+    h('aside', { className:'sidebar' },
+      h('div', { className:'sb-logo' },
+        h('div', { className:'sb-logo-title' }, 'TimeClock'),
+        h('div', { className:'sb-logo-sub' }, 'Panel Implementación')
+      ),
+      h('div', { className:'sb-nav' },
+        NAV.map(n => h('button', { key:n.id, className:'sb-item'+(view===n.id?' active':''),
+          onClick:()=>{ setSetupClient(null); setView(n.id); } }, n.icon, n.label))
+      ),
+      h('div', { className:'sb-footer' },
+        h('div', { className:'sb-user' }, h('strong', null, operator.name), operator.role),
+        h('button', { className:'btn btn-secondary btn-sm', style:{marginTop:8,width:'100%'}, onClick:logout }, h(ILogout,{s:13}), ' Salir')
+      )
+    ),
+    h('main', { className:'main' },
+      h(SetupScreen, { client:setupClient, onDone:()=>{ setSetupClient(null); setView('clients'); } })
+    )
+  );
+
+  // Pantalla del wizard
+  if (showNew) return h('div', { className:'shell' },
+    h('aside', { className:'sidebar' },
+      h('div', { className:'sb-logo' },
+        h('div', { className:'sb-logo-title' }, 'TimeClock'),
+        h('div', { className:'sb-logo-sub' }, 'Panel Implementación')
+      ),
+      h('div', { className:'sb-nav' },
+        NAV.map(n => h('button', { key:n.id, className:'sb-item', onClick:()=>{ setShowNew(false); setView(n.id); } }, n.icon, n.label))
+      ),
+      h('div', { className:'sb-footer' },
+        h('div', { className:'sb-user' }, h('strong', null, operator.name), operator.role),
+        h('button', { className:'btn btn-secondary btn-sm', style:{marginTop:8,width:'100%'}, onClick:logout }, h(ILogout,{s:13}), ' Salir')
+      )
+    ),
+    h('main', { className:'main' },
+      h('div', { className:'page-header' },
+        h('div', { className:'page-title' }, 'Registrar nuevo cliente'),
+        h('div', { className:'page-sub' }, 'Completa los datos del wizard para crear el registro en la base de datos maestra')
+      ),
+      h('div', { className:'page-body' },
+        h(WizardNew, {
+          onCreated: client => { setShowNew(false); setSetupClient(client); },
+          onCancel:  ()     => { setShowNew(false); setView('clients'); }
+        })
+      )
+    )
+  );
+
+  return h('div', { className:'shell' },
+    h('aside', { className:'sidebar' },
+      h('div', { className:'sb-logo' },
+        h('div', { className:'sb-logo-title' }, 'TimeClock'),
+        h('div', { className:'sb-logo-sub' }, 'Panel Implementación')
+      ),
+      h('div', { className:'sb-nav' },
+        NAV.map(n => h('button', { key:n.id, className:'sb-item'+(view===n.id?' active':''),
+          onClick:()=>setView(n.id) }, n.icon, n.label))
+      ),
+      h('div', { className:'sb-footer' },
+        h('div', { className:'sb-user' }, h('strong', null, operator.name), operator.role),
+        h('button', { className:'btn btn-secondary btn-sm', style:{marginTop:8,width:'100%'}, onClick:logout }, h(ILogout,{s:13}), ' Salir')
+      )
+    ),
+    h('main', { className:'main' },
+      view==='dashboard' ? h(Dashboard, null)
+        : h(ClientList, {
+            onNew:    ()  => setShowNew(true),
+            onSetup:  c   => setSetupClient(c),
+          })
+    )
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(h(App, null));
+</script>
+</body>
+</html>
